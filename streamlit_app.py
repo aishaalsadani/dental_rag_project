@@ -1,16 +1,13 @@
 """
 streamlit_app.py
-DentAI — Smart Dental Patient Assistant.
-Professional chat UI (ChatGPT-style) with:
-  - Left sidebar: brand + New chat + mode selector + footer info
-  - Centered chat column with proper max-width
-  - Fixed white chat input
-  - Clean, modern light theme
+DentAI - Smart Dental Patient Assistant (professional modern UI).
 """
 
 import os
+import time
 import importlib.util
 from pathlib import Path
+from datetime import datetime
 
 import streamlit as st
 
@@ -40,260 +37,194 @@ is_arabic = prompting.is_arabic
 # Page config
 # ---------------------------------------------------------------------------
 st.set_page_config(
-    page_title="DentAI — Smart Dental Assistant",
+    page_title="DentAI - Smart Dental Patient Assistant",
     page_icon="🦷",
     layout="wide",
-    initial_sidebar_state="expanded",
+    initial_sidebar_state="collapsed",
 )
 
 # ---------------------------------------------------------------------------
-# Global CSS — professional, ChatGPT-style
+# CSS — light, modern, professional
 # ---------------------------------------------------------------------------
 st.markdown("""
 <style>
-/* ============ RESET / BASE ============ */
-html, body, .stApp, [data-testid="stAppViewContainer"] {
-    background: #ffffff !important;
+/* ---- FORCE LIGHT THEME EVERYWHERE ---- */
+html, body, [data-testid="stAppViewContainer"], .stApp,
+[data-testid="stHeader"], [data-testid="stToolbar"],
+[data-testid="stBottomBlockContainer"], [data-testid="stBottom"],
+[data-testid="stChatInputContainer"], .main, section.main {
+    background: #f5f7fb !important;
+    background-color: #f5f7fb !important;
     color: #0f172a !important;
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Cairo",
-                 Roboto, "Helvetica Neue", sans-serif;
 }
-header[data-testid="stHeader"] { background: transparent !important; height: 0 !important; }
-#MainMenu, footer, [data-testid="stStatusWidget"], [data-testid="stToolbar"] {
-    visibility: hidden !important;
-}
+header[data-testid="stHeader"] { background: transparent !important; }
+#MainMenu, footer, [data-testid="stStatusWidget"] { visibility: hidden; }
+.block-container { padding-top: 1.2rem; padding-bottom: 8rem; max-width: 1100px; }
 
-/* ============ SIDEBAR ============ */
-[data-testid="stSidebar"] {
-    background: #f7f8fa !important;
-    border-right: 1px solid #e6ebf3 !important;
-    width: 280px !important;
-    min-width: 280px !important;
-}
-[data-testid="stSidebar"] > div:first-child {
-    padding-top: 20px;
-}
-[data-testid="stSidebar"] * { color: #0f172a !important; }
-
-.sb-brand {
-    display: flex; align-items: center; gap: 12px;
-    padding: 4px 8px 20px 8px;
-    border-bottom: 1px solid #e6ebf3;
-    margin-bottom: 18px;
-}
-.sb-logo {
-    width: 40px; height: 40px; border-radius: 10px;
+/* ---- TOP BAR (brand + pills) ---- */
+.brand { display: flex; align-items: center; gap: 12px; padding: 6px 4px; }
+.brand-logo {
+    width: 44px; height: 44px; border-radius: 10px;
     background: linear-gradient(135deg,#3ea6b8,#2b8fa3);
     display: flex; align-items: center; justify-content: center;
-    color: white; font-size: 20px;
+    color: white; font-size: 22px;
 }
-.sb-title { font-size: 17px; font-weight: 700; line-height: 1.1; }
-.sb-sub   { font-size: 12px; color:#64748b !important; margin-top: 2px; }
+.brand-title { font-size: 20px; font-weight: 700; color:#0f172a; line-height:1.1; }
+.brand-sub   { font-size: 13px; color:#64748b; }
 
-.sb-section-label {
-    font-size: 11px; font-weight: 700; letter-spacing: 1.5px;
-    color: #94a3b8 !important; margin: 18px 8px 8px 8px;
-    text-transform: uppercase;
-}
+/* ---- HERO ---- */
+.hero { text-align:center; margin: 10px 0 30px 0; }
+.hero h1 { font-size: 30px; font-weight: 800; color:#0f172a; margin-bottom: 10px; }
+.hero p  { font-size: 16px; color:#475569; margin: 4px 0; }
+.hero .lang { color:#2563eb; font-size: 14px; margin-top: 6px; }
 
-/* Sidebar buttons (New chat + mode selectors) */
-[data-testid="stSidebar"] div.stButton > button {
-    width: 100% !important;
-    background: #ffffff !important;
-    color: #334155 !important;
-    border: 1px solid #e6ebf3 !important;
-    border-radius: 10px !important;
-    padding: 10px 14px !important;
-    font-size: 14px !important;
-    font-weight: 500 !important;
-    text-align: left !important;
-    box-shadow: none !important;
-    transition: all .15s;
-    margin-bottom: 6px !important;
+/* ---- MODE CARDS ---- */
+.card {
+    background:#fff; border:1px solid #e6ebf3; border-radius:14px;
+    padding:22px; height:100%; transition:.15s;
+    box-shadow: 0 1px 2px rgba(15,23,42,.03);
 }
-[data-testid="stSidebar"] div.stButton > button:hover {
-    background: #eff6ff !important;
-    border-color: #bfdbfe !important;
-    color: #1d4ed8 !important;
-}
-[data-testid="stSidebar"] div.stButton > button[kind="primary"] {
-    background: #eff6ff !important;
-    border-color: #3b82f6 !important;
-    color: #1d4ed8 !important;
-    font-weight: 600 !important;
-}
+.card:hover { border-color:#cbd5e1; }
+.card.active { border:2px solid #3b82f6; background:#eff6ff; }
+.card .ico { font-size: 24px; margin-bottom: 10px; }
+.card h3 { font-size:17px; font-weight:700; color:#0f172a; margin: 4px 0 8px 0; }
+.card.active h3 { color:#1d4ed8; }
+.card p  { font-size:13.5px; color:#64748b; line-height:1.5; margin:0; }
 
-/* ============ MAIN CENTERED COLUMN ============ */
-.main .block-container {
-    max-width: 820px !important;
-    margin: 0 auto !important;
-    padding: 32px 24px 140px 24px !important;
+/* ---- SUGGESTIONS ---- */
+.section-label {
+    text-align:center; font-size:12px; font-weight:700; letter-spacing:2px;
+    color:#94a3b8; margin: 34px 0 14px 0;
 }
-
-/* ============ HERO (welcome screen) ============ */
-.hero {
-    text-align: center;
-    padding: 40px 20px 30px 20px;
+div.stButton > button {
+    width:100%; background:#fff !important; color:#334155 !important;
+    border:1px solid #e6ebf3 !important; border-radius:12px !important;
+    padding: 14px 18px !important; font-size:14.5px !important; font-weight:500 !important;
+    text-align:left !important; box-shadow: 0 1px 2px rgba(15,23,42,.03) !important;
+    transition:.15s;
 }
-.hero-icon {
-    font-size: 48px;
-    margin-bottom: 14px;
+div.stButton > button:hover {
+    border-color:#93c5fd !important; color:#1d4ed8 !important;
+    background:#f8fafc !important;
 }
-.hero h1 {
-    font-size: 32px; font-weight: 700; color:#0f172a;
-    margin: 0 0 12px 0;
-}
-.hero p {
-    font-size: 15px; color:#64748b; margin: 0 auto;
-    max-width: 520px; line-height: 1.6;
-}
-.hero .lang-badge {
-    display: inline-block;
-    margin-top: 16px;
-    background: #eff6ff;
-    color: #2563eb;
-    padding: 6px 14px;
-    border-radius: 20px;
-    font-size: 13px;
-    font-weight: 500;
+div.stButton > button[kind="primary"] {
+    background:#eff6ff !important; color:#1d4ed8 !important;
+    border:1px solid #bfdbfe !important; font-weight:600 !important;
 }
 
-/* ============ SUGGESTION CARDS ============ */
-.suggestion-title {
-    text-align: center;
-    font-size: 11px;
-    font-weight: 700;
-    letter-spacing: 2px;
-    color: #94a3b8;
-    margin: 40px 0 16px 0;
-    text-transform: uppercase;
-}
-.main .block-container div.stButton > button {
-    width: 100% !important;
-    background: #ffffff !important;
-    color: #334155 !important;
-    border: 1px solid #e6ebf3 !important;
-    border-radius: 12px !important;
-    padding: 16px 18px !important;
-    font-size: 14px !important;
-    font-weight: 400 !important;
-    text-align: left !important;
-    line-height: 1.5 !important;
-    transition: all .15s;
-    box-shadow: 0 1px 2px rgba(15,23,42,.02) !important;
-}
-.main .block-container div.stButton > button:hover {
-    border-color: #93c5fd !important;
-    color: #1d4ed8 !important;
-    background: #f8fafc !important;
-    transform: translateY(-1px);
-    box-shadow: 0 4px 12px rgba(59,130,246,.08) !important;
-}
-
-/* ============ CHAT BUBBLES ============ */
-.msg-row {
-    display: flex;
-    margin: 16px 0;
-    animation: fadeIn .3s ease;
-}
-.msg-row.user { justify-content: flex-end; }
-.msg-row.bot  { justify-content: flex-start; }
-
-@keyframes fadeIn {
-    from { opacity: 0; transform: translateY(4px); }
-    to   { opacity: 1; transform: translateY(0); }
-}
-
+/* ---- CHAT BUBBLES ---- */
 .msg-user, .msg-bot {
-    padding: 14px 18px;
-    border-radius: 16px;
-    max-width: 85%;
-    line-height: 1.65;
-    font-size: 15px;
+    padding: 14px 18px; border-radius: 14px; margin: 10px 0;
+    max-width: 78%; line-height: 1.65; font-size: 15px;
+    box-shadow: 0 1px 3px rgba(15,23,42,.06);
     word-wrap: break-word;
 }
 .msg-user {
-    background: #2563eb;
-    color: #ffffff !important;
+    background:#2563eb; color:#fff !important; margin-left:auto;
     border-bottom-right-radius: 4px;
 }
-.msg-user * { color: #ffffff !important; }
+.msg-user * { color: #fff !important; }
 .msg-bot {
-    background: #f7f8fa;
-    color: #0f172a !important;
-    border: 1px solid #e6ebf3;
+    background:#ffffff; color:#0f172a !important;
+    border:1px solid #e6ebf3; margin-right:auto;
     border-bottom-left-radius: 4px;
 }
-.msg-bot * { color: #0f172a !important; }
-.msg-bot strong { font-weight: 600 !important; }
-.rtl { direction: rtl; text-align: right; font-family: "Cairo","Segoe UI",sans-serif; }
+.msg-bot * { color:#0f172a !important; }
+.rtl { direction: rtl; text-align: right;
+       font-family: "Segoe UI", "Cairo", Tahoma, sans-serif; }
 
-/* ============ SOURCES EXPANDER ============ */
+/* ---- SOURCES EXPANDER ---- */
 [data-testid="stExpander"] {
     background: #ffffff !important;
     border: 1px solid #e6ebf3 !important;
-    border-radius: 10px !important;
-    margin: 4px 0 14px 0 !important;
-    max-width: 85%;
-    box-shadow: none !important;
+    border-radius: 12px !important;
+    margin: 6px 0 12px 0 !important;
+    max-width: 78%;
 }
-[data-testid="stExpander"] summary {
-    padding: 8px 14px !important;
-    font-size: 13px !important;
-    color: #64748b !important;
+[data-testid="stExpander"] summary,
+[data-testid="stExpander"] summary * {
+    color: #334155 !important;
     font-weight: 500 !important;
+    background: transparent !important;
 }
-[data-testid="stExpander"] summary:hover { color: #1d4ed8 !important; }
-[data-testid="stExpander"] summary * { color: inherit !important; background: transparent !important; }
 [data-testid="stExpander"] [data-testid="stExpanderDetails"] {
-    background: #fafbfc !important;
-    padding: 14px 18px !important;
-    border-top: 1px solid #e6ebf3 !important;
+    background: #f8fafc !important;
+    color: #0f172a !important;
+    padding: 12px 16px !important;
 }
 [data-testid="stExpander"] [data-testid="stExpanderDetails"] * {
-    color: #334155 !important;
+    color: #0f172a !important;
     background: transparent !important;
 }
 [data-testid="stExpander"] [data-testid="stExpanderDetails"] strong {
     color: #1d4ed8 !important;
-    font-weight: 600 !important;
 }
 [data-testid="stExpander"] [data-testid="stExpanderDetails"] hr {
-    border: none !important;
-    border-top: 1px solid #e6ebf3 !important;
-    margin: 10px 0 !important;
+    border-color: #e6ebf3 !important;
 }
 
-/* ============ CHAT INPUT (bottom) — FORCE WHITE ============ */
+/* ---- NEW CHAT small button ---- */
+.newchat-wrap { margin: 8px 0 4px 0; }
+.newchat-wrap div.stButton > button {
+    width: auto !important;
+    background: transparent !important;
+    color: #64748b !important;
+    border: 1px solid #e6ebf3 !important;
+    border-radius: 8px !important;
+    padding: 6px 14px !important;
+    font-size: 13px !important;
+    font-weight: 500 !important;
+    box-shadow: none !important;
+}
+.newchat-wrap div.stButton > button:hover {
+    background: #f1f5f9 !important;
+    color: #1d4ed8 !important;
+    border-color: #cbd5e1 !important;
+}
+
+/* ---- FOOTER NOTE ---- */
+.footer-note {
+    text-align:center; color:#64748b; font-size:13px; margin-top: 14px;
+}
+
+/* ---- CHAT INPUT BAR - AGGRESSIVE LIGHT OVERRIDE ---- */
 [data-testid="stBottom"],
 [data-testid="stBottomBlockContainer"],
-[data-testid="stChatInputContainer"] {
-    background: #ffffff !important;
+[data-testid="stBottom"] > div,
+[data-testid="stBottomBlockContainer"] > div,
+div[class*="stBottom"],
+section[data-testid="stBottom"],
+.stChatFloatingInputContainer,
+[data-testid="stChatInputContainer"],
+[data-testid="stChatInput"] > div,
+div[data-baseweb="base-input"] {
+    background: #f5f7fb !important;
+    background-color: #f5f7fb !important;
+}
+
+[data-testid="stBottom"], [data-testid="stBottomBlockContainer"] {
     border-top: 1px solid #e6ebf3 !important;
 }
-[data-testid="stBottom"] > div {
-    max-width: 820px !important;
-    margin: 0 auto !important;
-    padding: 16px 24px !important;
-}
+
 [data-testid="stChatInput"] {
     background: #ffffff !important;
-    border: 1px solid #d1d9e6 !important;
+    border: 1.5px solid #cbd5e1 !important;
     border-radius: 14px !important;
-    box-shadow: 0 2px 8px rgba(15,23,42,.04) !important;
-    transition: border-color .15s, box-shadow .15s;
+    box-shadow: 0 2px 8px rgba(15,23,42,.06) !important;
+    max-width: 1100px !important;
+    margin: 0 auto !important;
 }
 [data-testid="stChatInput"]:focus-within {
     border-color: #3b82f6 !important;
-    box-shadow: 0 0 0 3px rgba(59,130,246,.1) !important;
+    box-shadow: 0 0 0 3px rgba(59,130,246,.15) !important;
 }
 [data-testid="stChatInput"] textarea,
 [data-testid="stChatInput"] input {
     background: #ffffff !important;
     color: #0f172a !important;
     border: none !important;
-    font-size: 15px !important;
     caret-color: #2563eb !important;
+    font-size: 15px !important;
 }
 [data-testid="stChatInput"] textarea::placeholder,
 [data-testid="stChatInput"] input::placeholder {
@@ -301,24 +232,25 @@ header[data-testid="stHeader"] { background: transparent !important; height: 0 !
 }
 [data-testid="stChatInput"] button {
     background: #2563eb !important;
+    color: #fff !important;
     border-radius: 10px !important;
-    border: none !important;
-    transition: background .15s;
 }
-[data-testid="stChatInput"] button:hover { background: #1d4ed8 !important; }
-[data-testid="stChatInput"] button svg { fill: #ffffff !important; }
-
-/* ============ FOOTER NOTE ============ */
-.footer-note {
-    text-align: center;
-    color: #94a3b8;
-    font-size: 12px;
-    margin-top: 20px;
-    padding: 8px;
+[data-testid="stChatInput"] button:hover {
+    background: #1d4ed8 !important;
+}
+[data-testid="stChatInput"] button svg {
+    fill: #fff !important;
+    color: #fff !important;
 }
 
-/* Hide sidebar collapse button label */
-[data-testid="collapsedControl"] { color: #64748b !important; }
+/* Kill any dark leftovers from Streamlit */
+div[style*="background-color: rgb(14, 17, 23)"],
+div[style*="background: rgb(14, 17, 23)"],
+div[style*="background-color: rgb(38, 39, 48)"],
+div[style*="background: rgb(38, 39, 48)"] {
+    background: #f5f7fb !important;
+    background-color: #f5f7fb !important;
+}
 </style>
 """, unsafe_allow_html=True)
 
@@ -330,69 +262,88 @@ if "mode" not in st.session_state:
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
-MODES = {
-    "strict": ("🛡️", "Strict", "Full grounding & citations"),
-    "better": ("📋", "Better", "Grounding rules + free prose"),
-    "weak":   ("⚡", "Weak",   "Context dump, no rules"),
+def set_mode(m): st.session_state.mode = m
+
+MODE_LABELS = {
+    "strict": ("🛡️", "Strict"),
+    "better": ("📋", "Better"),
+    "weak":   ("⚡", "Weak"),
 }
 
 # ---------------------------------------------------------------------------
-# SIDEBAR — brand, new chat, mode selector
+# Top bar
 # ---------------------------------------------------------------------------
-with st.sidebar:
+top_left, top_right = st.columns([2, 3])
+with top_left:
     st.markdown("""
-    <div class="sb-brand">
-        <div class="sb-logo">🦷</div>
+    <div class="brand">
+        <div class="brand-logo">🦷</div>
         <div>
-            <div class="sb-title">DentAI</div>
-            <div class="sb-sub">Dental Assistant</div>
+            <div class="brand-title">DentAI</div>
+            <div class="brand-sub">Smart Dental Patient Assistant</div>
         </div>
     </div>
     """, unsafe_allow_html=True)
 
-    if st.button("＋  New chat", key="new_chat_sb", use_container_width=True):
-        st.session_state.messages = []
-        st.rerun()
+with top_right:
+    c1, c2, c3 = st.columns(3)
+    with c1:
+        if st.button("🛡️ Strict", key="pill_strict", use_container_width=True,
+                     type="primary" if st.session_state.mode == "strict" else "secondary"):
+            set_mode("strict"); st.rerun()
+    with c2:
+        if st.button("📋 Better", key="pill_better", use_container_width=True,
+                     type="primary" if st.session_state.mode == "better" else "secondary"):
+            set_mode("better"); st.rerun()
+    with c3:
+        if st.button("⚡ Weak", key="pill_weak", use_container_width=True,
+                     type="primary" if st.session_state.mode == "weak" else "secondary"):
+            set_mode("weak"); st.rerun()
 
-    st.markdown('<div class="sb-section-label">Response Mode</div>', unsafe_allow_html=True)
-
-    for key, (ico, name, desc) in MODES.items():
-        is_active = st.session_state.mode == key
-        if st.button(
-            f"{ico}  {name}",
-            key=f"mode_{key}",
-            use_container_width=True,
-            type="primary" if is_active else "secondary",
-            help=desc,
-        ):
-            st.session_state.mode = key
-            st.rerun()
-
-    st.markdown('<div class="sb-section-label">About</div>', unsafe_allow_html=True)
-    st.markdown(
-        '<div style="font-size:12px; color:#64748b; padding:0 8px; line-height:1.6;">'
-        'Grounded dental patient education, powered by retrieval + LLM. '
-        'Supports English & Egyptian Arabic 🇪🇬'
-        '</div>',
-        unsafe_allow_html=True,
-    )
+st.markdown("<br>", unsafe_allow_html=True)
 
 # ---------------------------------------------------------------------------
-# MAIN — welcome screen OR chat view
+# Welcome view
 # ---------------------------------------------------------------------------
 if not st.session_state.messages:
-    # ---- Welcome screen ----
     st.markdown("""
     <div class="hero">
-        <div class="hero-icon">🦷</div>
         <h1>Welcome to DentAI</h1>
-        <p>Your AI-powered dental patient education assistant.
-        Ask any dental question and get grounded, cited answers.</p>
-        <div class="lang-badge">🌍 English & Arabic (Egyptian dialect)</div>
+        <p>Your AI-powered dental patient education assistant. Ask any dental</p>
+        <p>question and get grounded, cited answers.</p>
+        <div class="lang">🌍 Supports English & Arabic (including Egyptian dialect)</div>
     </div>
     """, unsafe_allow_html=True)
 
-    st.markdown('<div class="suggestion-title">Try asking</div>', unsafe_allow_html=True)
+    m = st.session_state.mode
+    c1, c2, c3 = st.columns(3)
+    with c1:
+        st.markdown(f"""
+        <div class="card {'active' if m=='strict' else ''}">
+            <div class="ico">🛡️</div>
+            <h3>Strict Mode</h3>
+            <p>Full grounding with role, evidence boundaries, citations,
+            conflict resolution, and language detection.</p>
+        </div>
+        """, unsafe_allow_html=True)
+    with c2:
+        st.markdown(f"""
+        <div class="card {'active' if m=='better' else ''}">
+            <div class="ico">📋</div>
+            <h3>Better Mode</h3>
+            <p>Adds grounding rules and citation requirements with free-form prose output.</p>
+        </div>
+        """, unsafe_allow_html=True)
+    with c3:
+        st.markdown(f"""
+        <div class="card {'active' if m=='weak' else ''}">
+            <div class="ico">⚡</div>
+            <h3>Weak Mode</h3>
+            <p>Simple context dump with no rules — the model is free to hallucinate.</p>
+        </div>
+        """, unsafe_allow_html=True)
+
+    st.markdown('<div class="section-label">TRY ASKING</div>', unsafe_allow_html=True)
 
     suggestions = [
         "How should I take care of my new crown?",
@@ -405,7 +356,7 @@ if not st.session_state.messages:
 
     picked = None
     for i in range(0, len(suggestions), 2):
-        col_a, col_b = st.columns(2, gap="small")
+        col_a, col_b = st.columns(2)
         with col_a:
             if st.button(suggestions[i], key=f"sug_{i}", use_container_width=True):
                 picked = suggestions[i]
@@ -416,26 +367,27 @@ if not st.session_state.messages:
 
     if picked:
         st.session_state.messages.append({"role": "user", "content": picked})
-        with st.spinner("Thinking..."):
-            ans, sources = answer_question(picked, style=st.session_state.mode)
+        try:
+            with st.spinner("Thinking..."):
+                ans, sources = answer_question(picked, style=st.session_state.mode)
+        except Exception as e:
+            ans, sources = f"⚠️ Sorry, something went wrong: {str(e)}", []
         st.session_state.messages.append({"role": "assistant", "content": ans, "sources": sources})
         st.rerun()
 
+# ---------------------------------------------------------------------------
+# Chat view
+# ---------------------------------------------------------------------------
 else:
-    # ---- Chat view ----
     for msg in st.session_state.messages:
         rtl = "rtl" if is_arabic(msg["content"]) else ""
         if msg["role"] == "user":
-            st.markdown(
-                f'<div class="msg-row user"><div class="msg-user {rtl}">{msg["content"]}</div></div>',
-                unsafe_allow_html=True,
-            )
+            st.markdown(f'<div class="msg-user {rtl}">{msg["content"]}</div>',
+                        unsafe_allow_html=True)
         else:
             html_content = msg["content"].replace("\n", "<br>")
-            st.markdown(
-                f'<div class="msg-row bot"><div class="msg-bot {rtl}">{html_content}</div></div>',
-                unsafe_allow_html=True,
-            )
+            st.markdown(f'<div class="msg-bot {rtl}">{html_content}</div>',
+                        unsafe_allow_html=True)
             if msg.get("sources"):
                 with st.expander(f"📚 View {len(msg['sources'])} source(s)"):
                     for i, s in enumerate(msg["sources"], 1):
@@ -447,23 +399,38 @@ else:
                         if i < len(msg["sources"]):
                             st.markdown("---")
 
+    # New chat button
+    st.markdown('<div class="newchat-wrap">', unsafe_allow_html=True)
+    col_a, col_b, col_c = st.columns([6, 2, 6])
+    with col_b:
+        if st.button("↻ New chat", key="new_chat_btn"):
+            st.session_state.messages = []
+            st.rerun()
+    st.markdown('</div>', unsafe_allow_html=True)
+
 # ---------------------------------------------------------------------------
-# CHAT INPUT (bottom)
+# Input
 # ---------------------------------------------------------------------------
 user_input = st.chat_input("Ask a dental question... (English or Arabic)")
 if user_input:
-    st.session_state.messages.append({"role": "user", "content": user_input})
-    with st.spinner("Thinking..."):
-        ans, sources = answer_question(user_input, style=st.session_state.mode)
-    st.session_state.messages.append({"role": "assistant", "content": ans, "sources": sources})
-    st.rerun()
+    if len(user_input.strip()) < 3:
+        st.warning("⚠️ Please ask a more detailed question.")
+    else:
+        st.session_state.messages.append({"role": "user", "content": user_input})
+        try:
+            with st.spinner("Thinking..."):
+                ans, sources = answer_question(user_input, style=st.session_state.mode)
+        except Exception as e:
+            ans, sources = f"⚠️ Sorry, something went wrong: {str(e)}", []
+        st.session_state.messages.append({"role": "assistant", "content": ans, "sources": sources})
+        st.rerun()
 
 # ---------------------------------------------------------------------------
-# FOOTER
+# Footer
 # ---------------------------------------------------------------------------
-mode_ico, mode_name, _ = MODES[st.session_state.mode]
+mode_ico, mode_name = MODE_LABELS[st.session_state.mode]
 st.markdown(
-    f'<div class="footer-note">Mode: {mode_ico} {mode_name} · '
-    f'Grounded in retrieved sources · Not a substitute for professional dental advice.</div>',
+    f'<div class="footer-note">Answers are grounded in retrieved dental sources. '
+    f'Mode: {mode_ico} <b>{mode_name}</b> · Not a substitute for professional dental advice.</div>',
     unsafe_allow_html=True,
 )
