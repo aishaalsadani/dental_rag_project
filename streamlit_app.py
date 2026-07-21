@@ -1,6 +1,6 @@
 """
 streamlit_app.py
-DentAI - Smart Dental Patient Assistant (professional modern UI).
+DentAI - Smart Dental Patient Assistant (patient-friendly UI).
 """
 
 import os
@@ -101,17 +101,17 @@ html, body, [data-testid="stAppViewContainer"], .stApp,
 /* ---- MODE DESCRIPTION (single line, dynamic) ---- */
 .mode-desc {
     text-align: center;
-    background: #eff6ff;
-    border: 1px solid #bfdbfe;
-    border-radius: 12px;
-    padding: 14px 20px;
-    margin: 20px auto;
-    max-width: 700px;
-    color: #1e40af;
-    font-size: 14px;
-    line-height: 1.6;
+    background: #f0f9ff;
+    border: 1px solid #bae6fd;
+    border-radius: 10px;
+    padding: 12px 18px;
+    margin: 16px auto;
+    max-width: 620px;
+    color: #075985;
+    font-size: 13.5px;
+    line-height: 1.55;
 }
-.mode-desc b { color: #1d4ed8; }
+.mode-desc b { color: #0369a1; font-weight: 600; }
 
 /* ---- SUGGESTIONS ---- */
 .section-label {
@@ -288,15 +288,15 @@ if "messages" not in st.session_state:
 def set_mode(m): st.session_state.mode = m
 
 MODE_LABELS = {
-    "strict": ("🛡️", "Strict"),
-    "better": ("📋", "Better"),
-    "weak":   ("⚡", "Weak"),
+    "strict": ("🛡️", "Safe"),
+    "better": ("📋", "Balanced"),
+    "weak":   ("⚡", "Quick"),
 }
 
 MODE_DESCRIPTIONS = {
-    "strict": "🛡️ <b>Strict Mode:</b> Full grounding with role, evidence boundaries, citations, conflict resolution, and language detection.",
-    "better": "📋 <b>Better Mode:</b> Adds grounding rules and citation requirements with free-form prose output.",
-    "weak":   "⚡ <b>Weak Mode:</b> Simple context dump with no rules — the model is free to hallucinate.",
+    "strict": "🛡️ <b>Safe Mode:</b> Answers are carefully checked and based only on trusted dental sources. Best for accurate, reliable information.",
+    "better": "📋 <b>Balanced Mode:</b> Clear answers backed by dental sources, written in an easy-to-read style.",
+    "weak":   "⚡ <b>Quick Mode:</b> Faster answers with less checking. Use only for general curiosity, not medical decisions.",
 }
 
 # ---------------------------------------------------------------------------
@@ -317,15 +317,15 @@ with top_left:
 with top_right:
     c1, c2, c3 = st.columns(3)
     with c1:
-        if st.button("🛡️ Strict", key="pill_strict", use_container_width=True,
+        if st.button("🛡️ Safe", key="pill_strict", use_container_width=True,
                      type="primary" if st.session_state.mode == "strict" else "secondary"):
             set_mode("strict"); st.rerun()
     with c2:
-        if st.button("📋 Better", key="pill_better", use_container_width=True,
+        if st.button("📋 Balanced", key="pill_better", use_container_width=True,
                      type="primary" if st.session_state.mode == "better" else "secondary"):
             set_mode("better"); st.rerun()
     with c3:
-        if st.button("⚡ Weak", key="pill_weak", use_container_width=True,
+        if st.button("⚡ Quick", key="pill_weak", use_container_width=True,
                      type="primary" if st.session_state.mode == "weak" else "secondary"):
             set_mode("weak"); st.rerun()
 
@@ -335,10 +335,10 @@ with top_right:
 if not st.session_state.messages:
     st.markdown("""
     <div class="hero">
-        <h1>Welcome to DentAI 🦷</h1>
-        <p>Your AI-powered dental patient education assistant.</p>
-        <p>Ask any dental question and get grounded, cited answers.</p>
-        <div class="lang">🌍 Supports English & Arabic (including Egyptian dialect)</div>
+        <h1>👋 Hi! I'm DentAI</h1>
+        <p>Your friendly dental assistant. Ask me anything about your teeth,</p>
+        <p>gums, treatments, or dental care — I'm here to help!</p>
+        <div class="lang">🌍 You can ask in English or Arabic (العربية والمصري)</div>
     </div>
     """, unsafe_allow_html=True)
 
@@ -435,7 +435,8 @@ if user_input:
 # ---------------------------------------------------------------------------
 mode_ico, mode_name = MODE_LABELS[st.session_state.mode]
 st.markdown(
-    f'<div class="footer-note">Answers are grounded in retrieved dental sources. '
-    f'Mode: {mode_ico} <b>{mode_name}</b> · Not a substitute for professional dental advice.</div>',
+    f'<div class="footer-note">💙 Answers based on trusted dental sources · '
+    f'Currently in {mode_ico} <b>{mode_name}</b> mode · '
+    f'Always consult your dentist for personal advice.</div>',
     unsafe_allow_html=True,
 )
