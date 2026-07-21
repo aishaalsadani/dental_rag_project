@@ -2,13 +2,12 @@
 07_prompting.py
 Three prompt styles + grounded LLM generation via OpenRouter.
 
-Improvements in this version:
-  - Better STRICT prompt that tries to be helpful even with partial evidence.
-  - Smarter fallback: if no API key BUT no evidence, still gives general guidance
-    with a clear disclaimer instead of just "call the clinic".
-  - Debug prints (only when DEBUG_PROMPTING=1 in env) to see what's happening.
-  - If API key exists but evidence is empty, we STILL call the LLM with a
-    special "general knowledge mode" prompt so patients get real answers.
+Cleaned version:
+  - Removes any trailing "SOURCES USED: general knowledge" (or Arabic
+    equivalents) from the final answer.
+  - NO_CONTEXT_PROMPT no longer asks the model for a SOURCES line at all.
+  - Smart fallback: if API key exists but no retrieval evidence, still
+    answer using general dental knowledge.
 """
 
 import os
@@ -57,7 +56,7 @@ How to use the context:
 - Prefer information from the context package below when it is relevant, and cite it with [1], [2], etc.
 - If the context is only partially relevant, USE the relevant parts AND supplement with well-established general dental knowledge — but clearly separate cited claims from general guidance.
 - If the context is empty or totally unrelated, still give a helpful answer based on general dental knowledge, and add a short note like: "This is general guidance — for your specific case, please contact the clinic."
-- NEVER refuse to answer just because the context is thin. Only refuse if the question is dangerous, non-dental, or clearly requires an in-person exam (e.g., "diagnose my pain from a photo").
+- NEVER refuse to answer just because the context is thin. Only refuse if the question is dangerous, non-dental, or clearly requires an in-person exam.
 
 Safety rules:
 - Do not prescribe medication doses or diagnose specific conditions.
@@ -77,18 +76,21 @@ Language rule (VERY IMPORTANT):
     * فصحى     -> "الإجابة:" and "المصادر المستخدمة:"
     * مصري     -> "الإجابة:" and "المصادر اللي اتستخدمت:"
 - Citations always stay as [1], [2] etc.
+- If you did NOT actually use any of the numbered sources, DO NOT output the
+  "SOURCES USED" line at all. Only output that line when you actually cited [n].
 
 Context package:
 {context}
 
 Patient question: {question}
 
-Reply in exactly this two-part format (with labels translated as above):
+Reply in this format (omit the SOURCES line entirely if you didn't cite anything):
 ANSWER: <your helpful answer, with [n] citations where context was used>
-SOURCES USED: <comma-separated source numbers you actually used, or "general knowledge" if none>"""
+SOURCES USED: <comma-separated source numbers you actually cited>"""
 
 
-# Special prompt used when retrieval returns nothing but we still have an API key.
+# Prompt used when retrieval returns nothing but we still have an API key.
+# NOTE: this prompt intentionally does NOT ask for a SOURCES USED line.
 NO_CONTEXT_PROMPT = """You are DentAI, a friendly dental patient-education assistant.
 
 The internal knowledge base did NOT return any relevant sources for this question,
@@ -101,7 +103,8 @@ Rules:
   should contact the clinic.
 - Do not prescribe medication doses or diagnose specific conditions.
 - For emergencies (severe swelling, trauma, uncontrolled bleeding), tell them to seek urgent care.
-- DO NOT add any "SOURCES USED" line or citations. Just give the answer directly.
+- DO NOT include any "SOURCES USED", "المصادر المستخدمة", or "المصادر اللي اتستخدمت" line.
+- DO NOT add citations like [1], [2]. Just give the answer directly.
 
 Language rule:
 - Detect the language/dialect of the question and reply in the same one.
@@ -115,7 +118,7 @@ Language rule:
 
 Patient question: {question}
 
-Reply in this format:
+Reply in this format ONLY (no sources line):
 ANSWER: <your helpful general-knowledge answer>"""
 
 
@@ -134,15 +137,47 @@ def is_arabic(text):
     return bool(_ARABIC_RE.search(text or ""))
 
 
+# Matches lines like:
+#   SOURCES USED: general knowledge
+#   SOURCES USED: none
+#   SOURCES USED:
+#   المصادر المستخدمة: لا يوجد
+#   المصادر اللي اتستخدمت: معرفة عامة
+#   المصادر اللي اتستخدمت:
+_EMPTY_SOURCES_RE = re.compile(
+    r"^[\-\*\s>]*"
+    r"(?:\*\*)?"
+    r"(SOURCES\s*USED|المصادر\s*المستخدمة|المصادر\s*اللي\s*اتستخدمت|المصادر)"
+    r"(?:\*\*)?"
+    r"\s*[:\-–]\s*"
+    r"(general\s*knowledge|none|n/?a|لا\s*يوجد|معرفة\s*عامة|—|-|\.|)?\s*$",
+    re.IGNORECASE | re.MULTILINE,
+)
+
+
+def _clean_answer(text):
+    """
+    Remove any empty / 'general knowledge' SOURCES line from the answer.
+    Also trims trailing whitespace and stray blank lines.
+    """
+    if not text:
+        return text
+
+    cleaned = _EMPTY_SOURCES_RE.sub("", text)
+
+    # collapse 3+ blank lines to just one
+    cleaned = re.sub(r"\n{3,}", "\n\n", cleaned)
+
+    return cleaned.rstrip()
+
+
 def _egyptian_no_context_fallback(question):
     """Used only when NO api key AND NO evidence."""
     if is_arabic(question):
-        return ("الإجابة: للأسف مفيش مفتاح API متظبط، فمقدرش أجاوبك دلوقتي بشكل كامل. "
-                "من فضلك ظبطي OPENROUTER_API_KEY في ملف .env أو في Streamlit Secrets.\n"
-                "المصادر اللي اتستخدمت: لا يوجد")
+        return ("الإجابة: للأسف مفيش مفتاح API متظبط، فمقدرش أجاوبك دلوقتي. "
+                "من فضلك ظبطي OPENROUTER_API_KEY في ملف .env أو في Streamlit Secrets.")
     return ("ANSWER: I can't answer right now because no OPENROUTER_API_KEY is configured. "
-            "Please set it in your .env file or Streamlit Secrets.\n"
-            "SOURCES USED: none")
+            "Please set it in your .env file or Streamlit Secrets.")
 
 
 def _extractive_fallback(evidence, question=""):
@@ -152,21 +187,15 @@ def _extractive_fallback(evidence, question=""):
 
     if is_arabic(question):
         lines = ["الإجابة: [مفيش OPENROUTER_API_KEY متظبط -- ده رد مبني على المصادر مباشرة]"]
-        used = []
         for i, e in enumerate(evidence, start=1):
             snippet = " ".join(e["text"].split()[:40])
             lines.append(f"- {snippet} [{i}]")
-            used.append(str(i))
-        lines.append("المصادر اللي اتستخدمت: " + "، ".join(used))
         return "\n".join(lines)
 
     lines = ["ANSWER: Based on the retrieved sources:"]
-    used = []
     for i, e in enumerate(evidence, start=1):
         snippet = " ".join(e["text"].split()[:40])
         lines.append(f"- {snippet} [{i}]")
-        used.append(str(i))
-    lines.append("SOURCES USED: " + ", ".join(used))
     return "[SIMULATED ANSWER -- no OPENROUTER_API_KEY set]\n" + "\n".join(lines)
 
 
@@ -175,7 +204,7 @@ def ask_openrouter(prompt):
     response = client.chat.completions.create(
         model=OPENROUTER_MODEL,
         messages=[{"role": "user", "content": prompt}],
-        temperature=0.2,   # slight warmth for natural dialect
+        temperature=0.2,
         max_tokens=500,
     )
     return response.choices[0].message.content
@@ -195,15 +224,17 @@ def answer_question(question, style="strict"):
 
     # Case 1: no API key -> local fallback
     if not OPENROUTER_API_KEY:
-        return _extractive_fallback(evidence, question), evidence
+        ans = _extractive_fallback(evidence, question)
+        return _clean_answer(ans), evidence
 
-    # Case 2: API key exists but NO evidence -> use general-knowledge prompt
+    # Case 2: API key but no evidence -> general-knowledge prompt
     if not evidence:
         if DEBUG:
             print("[DEBUG] No evidence found, using NO_CONTEXT_PROMPT")
         prompt = NO_CONTEXT_PROMPT.format(question=question)
         try:
-            return ask_openrouter(prompt), []
+            ans = ask_openrouter(prompt)
+            return _clean_answer(ans), []
         except Exception as exc:
             return f"[LLM call failed: {exc}]", []
 
@@ -211,13 +242,13 @@ def answer_question(question, style="strict"):
     context_text = format_context_package(evidence)
     prompt = build_prompt(question, context_text, style=style)
     try:
-        return ask_openrouter(prompt), evidence
+        ans = ask_openrouter(prompt)
+        return _clean_answer(ans), evidence
     except Exception as exc:
         return f"[LLM call failed: {exc}]", evidence
 
 
 if __name__ == "__main__":
-    # Quick smoke test
     test_qs = [
         "How should I take care of my new crown or bridge?",
         "ازاي اعرف ان علاج اللثة بتاعي بيشتغل فعلا؟",
