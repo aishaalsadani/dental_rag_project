@@ -1,397 +1,314 @@
 """
 streamlit_app.py
-Chains the full pipeline (documents -> preprocessing -> chunking -> retrieval ->
-context building -> prompting) and serves grounded, source-cited answers.
+DentAI - Smart Dental Patient Assistant (clean UI matching the mockup).
 
-The API key is read from Streamlit secrets when deployed (exact rubric pattern);
-it is never stored in code.
+Run locally:
+    streamlit run streamlit_app.py
 
-Design: a calm, clinical "teal chart" identity (deep teal + warm ivory + mint,
-Fraunces/Manrope for Latin text, Cairo for Arabic) instead of default Streamlit
-styling. The assistant answers in whatever language/dialect the patient asks in,
-including Egyptian colloquial Arabic (العامية المصرية).
+Secrets (Streamlit Cloud) or .env (local):
+    OPENROUTER_API_KEY = "sk-or-..."
+    OPENROUTER_MODEL   = "openai/gpt-4o-mini"   # optional
 """
 
-from importlib import import_module
+import os
+import re
+import importlib.util
+from pathlib import Path
 
 import streamlit as st
 
-rag = import_module("07_prompting")
-
-# --- Read the key from Streamlit secrets when deployed (exact rubric pattern) ---
+# ---------------------------------------------------------------------------
+# Inject secrets into env BEFORE importing the pipeline module
+# ---------------------------------------------------------------------------
 try:
-    if not rag.OPENROUTER_API_KEY:
-        rag.OPENROUTER_API_KEY = st.secrets.get("OPENROUTER_API_KEY", "")
-    rag.OPENROUTER_MODEL = st.secrets.get("OPENROUTER_MODEL", rag.OPENROUTER_MODEL)
+    if "OPENROUTER_API_KEY" in st.secrets:
+        os.environ["OPENROUTER_API_KEY"] = st.secrets["OPENROUTER_API_KEY"]
+    if "OPENROUTER_MODEL" in st.secrets:
+        os.environ["OPENROUTER_MODEL"] = st.secrets["OPENROUTER_MODEL"]
 except Exception:
-    pass
+    pass  # running locally without secrets is fine
 
+# ---------------------------------------------------------------------------
+# Load 07_prompting.py (name starts with a digit → import via spec)
+# ---------------------------------------------------------------------------
+HERE = Path(__file__).parent
+spec = importlib.util.spec_from_file_location("prompting", HERE / "07_prompting.py")
+prompting = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(prompting)
+
+answer_question = prompting.answer_question
+is_arabic = prompting.is_arabic
+
+# ---------------------------------------------------------------------------
+# Page config
+# ---------------------------------------------------------------------------
 st.set_page_config(
-    page_title="Dental Patient-Education Assistant",
+    page_title="DentAI - Smart Dental Patient Assistant",
     page_icon="🦷",
-    layout="centered",
+    layout="wide",
+    initial_sidebar_state="collapsed",
 )
 
-# ----------------------------------------------------------------------------
-# Design tokens + global styling
-# ----------------------------------------------------------------------------
-st.markdown(
-    """
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Manrope:wght@400;500;600;700;800&family=Cairo:wght@500;600;700;800&display=swap" rel="stylesheet">
+# ---------------------------------------------------------------------------
+# Global CSS  (clean, modern, matches the mockup)
+# ---------------------------------------------------------------------------
+st.markdown("""
+<style>
+/* ---- base ---- */
+.stApp { background: #f5f7fb; }
+header[data-testid="stHeader"] { background: transparent; }
+#MainMenu, footer { visibility: hidden; }
+.block-container { padding-top: 1.2rem; padding-bottom: 8rem; max-width: 1100px; }
 
-    <style>
-    :root {
-        --bg-deep:     #0A1F1C;
-        --bg-panel:    #10302A;
-        --bg-card:     #163A34;
-        --bg-card-2:   #1B443D;
-        --line:        #2B5850;
-        --text-hi:     #F3EFE2;
-        --text-lo:     #9FC4BA;
-        --mint:        #5EEAD4;
-        --mint-dim:    #2C7A6C;
-        --coral:       #FF7A5C;
-        --coral-dim:   #7A3A2E;
-    }
+/* ---- top bar ---- */
+.topbar {
+    display: flex; align-items: center; justify-content: space-between;
+    background: #ffffff; padding: 14px 22px; border-radius: 14px;
+    border: 1px solid #e6ebf3; box-shadow: 0 1px 2px rgba(15,23,42,.04);
+    margin-bottom: 28px;
+}
+.brand { display: flex; align-items: center; gap: 12px; }
+.brand-logo {
+    width: 44px; height: 44px; border-radius: 10px;
+    background: linear-gradient(135deg,#3ea6b8,#2b8fa3);
+    display: flex; align-items: center; justify-content: center;
+    color: white; font-size: 22px;
+}
+.brand-title { font-size: 20px; font-weight: 700; color:#0f172a; line-height:1.1; }
+.brand-sub   { font-size: 13px; color:#64748b; }
 
-    html, body, [class*="css"]  { color: var(--text-hi); }
+.mode-pills { display: flex; gap: 8px; }
+.pill {
+    padding: 8px 14px; border-radius: 10px; font-size: 14px; font-weight: 500;
+    border: 1px solid #e6ebf3; background: #fff; color:#334155;
+}
+.pill.active { background: #eaf4ff; color:#1d4ed8; border-color:#bfdbfe; }
 
-    .stApp {
-        background:
-            radial-gradient(1200px 520px at 15% -10%, rgba(94,234,212,0.10), transparent 60%),
-            radial-gradient(900px 500px at 100% 0%, rgba(255,122,92,0.06), transparent 55%),
-            var(--bg-deep);
-    }
+/* ---- hero ---- */
+.hero { text-align:center; margin: 10px 0 30px 0; }
+.hero h1 { font-size: 30px; font-weight: 800; color:#0f172a; margin-bottom: 10px; }
+.hero p  { font-size: 16px; color:#475569; margin: 4px 0; }
+.hero .lang { color:#2563eb; font-size: 14px; margin-top: 6px; }
 
-    /* Hide default chrome for a cleaner surface */
-    #MainMenu, header[data-testid="stHeader"] { background: transparent; }
+/* ---- mode cards ---- */
+.card {
+    background:#fff; border:1px solid #e6ebf3; border-radius:14px;
+    padding:22px; height:100%; transition:.15s;
+    box-shadow: 0 1px 2px rgba(15,23,42,.03);
+}
+.card:hover { border-color:#cbd5e1; }
+.card.active { border:2px solid #3b82f6; background:#eff6ff; }
+.card .ico { font-size: 24px; margin-bottom: 10px; }
+.card h3 { font-size:17px; font-weight:700; color:#0f172a; margin: 4px 0 8px 0; }
+.card.active h3 { color:#1d4ed8; }
+.card p  { font-size:13.5px; color:#64748b; line-height:1.5; margin:0; }
 
-    section.main > div { padding-top: 1.2rem; }
+/* ---- try asking ---- */
+.section-label {
+    text-align:center; font-size:12px; font-weight:700; letter-spacing:2px;
+    color:#94a3b8; margin: 34px 0 14px 0;
+}
+div.stButton > button {
+    width:100%; background:#fff; color:#334155; border:1px solid #e6ebf3;
+    border-radius:12px; padding: 16px 18px; font-size:14.5px; font-weight:500;
+    text-align:left; box-shadow: 0 1px 2px rgba(15,23,42,.03); transition:.15s;
+}
+div.stButton > button:hover { border-color:#93c5fd; color:#1d4ed8; background:#f8fafc; }
 
-    /* ---------- Hero ---------- */
-    .drx-hero {
-        display: flex;
-        align-items: center;
-        gap: 18px;
-        padding: 26px 28px;
-        border-radius: 20px;
-        background: linear-gradient(135deg, var(--bg-panel), var(--bg-card));
-        border: 1px solid var(--line);
-        margin-bottom: 22px;
-        position: relative;
-        overflow: hidden;
-    }
-    .drx-hero::after {
-        content: "";
-        position: absolute;
-        right: -40px; top: -40px;
-        width: 160px; height: 160px;
-        border-radius: 50%;
-        background: radial-gradient(circle, rgba(94,234,212,0.18), transparent 70%);
-    }
-    .drx-tooth {
-        font-size: 40px;
-        line-height: 1;
-        filter: drop-shadow(0 0 14px rgba(94,234,212,0.45));
-    }
-    .drx-title {
-        font-family: 'Fraunces', serif;
-        font-weight: 600;
-        font-size: 30px;
-        letter-spacing: -0.01em;
-        color: var(--text-hi);
-        margin: 0;
-    }
-    .drx-title .accent { color: var(--mint); }
-    .drx-sub {
-        font-family: 'Manrope', sans-serif;
-        color: var(--text-lo);
-        font-size: 14.5px;
-        margin-top: 6px;
-        line-height: 1.5;
-    }
-    .drx-badgebar {
-        display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap;
-    }
-    .drx-pill {
-        font-family: 'Manrope', sans-serif;
-        font-size: 11.5px;
-        font-weight: 700;
-        letter-spacing: 0.03em;
-        padding: 4px 10px;
-        border-radius: 999px;
-        border: 1px solid var(--mint-dim);
-        color: var(--mint);
-        background: rgba(94,234,212,0.07);
-    }
-    .drx-pill.coral { border-color: var(--coral-dim); color: var(--coral); background: rgba(255,122,92,0.08); }
+/* ---- chat bubbles ---- */
+.msg-user, .msg-bot {
+    padding: 14px 18px; border-radius: 14px; margin: 8px 0;
+    max-width: 85%; line-height: 1.55; font-size: 15px;
+}
+.msg-user { background:#2563eb; color:#fff; margin-left:auto; }
+.msg-bot  { background:#fff; color:#0f172a; border:1px solid #e6ebf3; margin-right:auto; }
+.rtl { direction: rtl; text-align: right; font-family: "Segoe UI", Tahoma, sans-serif; }
 
-    /* ---------- Sidebar ---------- */
-    section[data-testid="stSidebar"] {
-        background: var(--bg-panel);
-        border-right: 1px solid var(--line);
-    }
-    section[data-testid="stSidebar"] .block-container { padding-top: 2rem; }
-    .drx-side-title {
-        font-family: 'Manrope', sans-serif;
-        font-weight: 800;
-        font-size: 13px;
-        letter-spacing: 0.08em;
-        text-transform: uppercase;
-        color: var(--mint);
-        margin-bottom: 2px;
-    }
-    .drx-side-sub {
-        font-family: 'Manrope', sans-serif;
-        font-size: 12.5px;
-        color: var(--text-lo);
-        margin-bottom: 14px;
-    }
-    section[data-testid="stSidebar"] div.stButton > button {
-        width: 100%;
-        text-align: left;
-        background: var(--bg-card);
-        border: 1px solid var(--line);
-        color: var(--text-hi);
-        border-radius: 12px;
-        padding: 10px 12px;
-        font-family: 'Manrope', sans-serif;
-        font-size: 13px;
-        margin-bottom: 8px;
-        transition: all 0.15s ease;
-    }
-    section[data-testid="stSidebar"] div.stButton > button:hover {
-        border-color: var(--mint);
-        background: var(--bg-card-2);
-        color: var(--mint);
-    }
+/* ---- footer note ---- */
+.footer-note {
+    text-align:center; color:#64748b; font-size:13px; margin-top: 10px;
+}
 
-    /* ---------- Question card ---------- */
-    .drx-card {
-        background: var(--bg-panel);
-        border: 1px solid var(--line);
-        border-radius: 18px;
-        padding: 20px 22px;
-        margin-bottom: 18px;
-    }
-    .drx-label {
-        font-family: 'Manrope', sans-serif;
-        font-weight: 700;
-        font-size: 12.5px;
-        letter-spacing: 0.06em;
-        text-transform: uppercase;
-        color: var(--text-lo);
-        margin-bottom: 8px;
-    }
-    textarea, .stTextArea textarea {
-        background: var(--bg-card) !important;
-        color: var(--text-hi) !important;
-        border: 1px solid var(--line) !important;
-        border-radius: 12px !important;
-        font-family: 'Manrope', sans-serif !important;
-        font-size: 15px !important;
-    }
-    textarea:focus { border-color: var(--mint) !important; box-shadow: 0 0 0 1px var(--mint) !important; }
+/* ---- input area at bottom ---- */
+div[data-testid="stChatInput"] {
+    background: #ffffff; border-top: 1px solid #e6ebf3;
+}
+</style>
+""", unsafe_allow_html=True)
 
-    div.stButton > button[kind="primary"], .drx-card + div div.stButton > button {
-        background: linear-gradient(135deg, var(--mint), #37B8A3) !important;
-        color: #08201C !important;
-        font-family: 'Manrope', sans-serif !important;
-        font-weight: 800 !important;
-        border: none !important;
-        border-radius: 12px !important;
-        padding: 0.55rem 1.4rem !important;
-        letter-spacing: 0.01em;
-    }
-    div.stButton > button[kind="primary"]:hover { filter: brightness(1.08); }
+# ---------------------------------------------------------------------------
+# Session state
+# ---------------------------------------------------------------------------
+if "mode" not in st.session_state:
+    st.session_state.mode = "strict"
+if "messages" not in st.session_state:
+    st.session_state.messages = []  # list of dicts: {role, content, sources?}
 
-    /* ---------- Answer ---------- */
-    .drx-answer-card {
-        background: linear-gradient(180deg, var(--bg-card), var(--bg-panel));
-        border: 1px solid var(--mint-dim);
-        border-radius: 18px;
-        padding: 22px 24px;
-        font-family: 'Manrope', sans-serif;
-        font-size: 15.5px;
-        line-height: 1.75;
-        color: var(--text-hi);
-        white-space: pre-wrap;
-    }
-    .drx-answer-card.rtl {
-        direction: rtl;
-        text-align: right;
-        font-family: 'Cairo', sans-serif;
-        font-size: 16.5px;
-    }
-    .drx-answer-head {
-        font-family: 'Manrope', sans-serif;
-        font-weight: 800;
-        font-size: 12.5px;
-        letter-spacing: 0.08em;
-        text-transform: uppercase;
-        color: var(--mint);
-        margin-bottom: 10px;
-    }
+def set_mode(m): st.session_state.mode = m
 
-    /* ---------- Sources ---------- */
-    .drx-src {
-        display: flex;
-        gap: 12px;
-        padding: 12px 4px;
-        border-bottom: 1px dashed var(--line);
-    }
-    .drx-src:last-child { border-bottom: none; }
-    .drx-src-num {
-        min-width: 28px; height: 28px;
-        border-radius: 50%;
-        display: flex; align-items: center; justify-content: center;
-        font-family: 'Manrope', sans-serif;
-        font-weight: 800;
-        font-size: 12.5px;
-        border: 2px solid var(--mint);
-        color: var(--mint);
-        flex-shrink: 0;
-    }
-    .drx-src-num.outdated { border-color: var(--coral); color: var(--coral); }
-    .drx-src-title { font-family: 'Manrope', sans-serif; font-weight: 700; font-size: 14px; color: var(--text-hi); }
-    .drx-src-meta { font-family: 'Manrope', sans-serif; font-size: 11.5px; color: var(--text-lo); margin: 2px 0 6px 0; }
-    .drx-src-text { font-family: 'Manrope', sans-serif; font-size: 13.5px; color: var(--text-lo); line-height: 1.55; }
+MODE_LABELS = {
+    "strict": ("🛡️", "Strict"),
+    "better": ("📋", "Better"),
+    "weak":   ("⚡", "Weak"),
+}
 
-    .drx-footer {
-        text-align: center;
-        color: var(--text-lo);
-        font-family: 'Manrope', sans-serif;
-        font-size: 11.5px;
-        margin-top: 30px;
-        opacity: 0.7;
-    }
-    </style>
-    """,
-    unsafe_allow_html=True,
-)
-
-# ----------------------------------------------------------------------------
-# Hero header
-# ----------------------------------------------------------------------------
-st.markdown(
-    """
-    <div class="drx-hero">
-        <div class="drx-tooth">🦷</div>
+# ---------------------------------------------------------------------------
+# Top bar (brand + mode pills)
+# ---------------------------------------------------------------------------
+top_left, top_right = st.columns([2, 3])
+with top_left:
+    st.markdown("""
+    <div class="brand">
+        <div class="brand-logo">🦷</div>
         <div>
-            <div class="drx-title">Dental Patient-Education <span class="accent">Assistant</span></div>
-            <div class="drx-sub">
-                Answers are grounded ONLY in retrieved patient-education handouts,
-                prefer CURRENT sources over OUTDATED ones, and always cite where they come from.
-            </div>
-            <div class="drx-badgebar">
-                <span class="drx-pill">🇬🇧 English</span>
-                <span class="drx-pill">🇪🇬 العامية المصرية</span>
-                <span class="drx-pill coral">Grounded &amp; Cited</span>
-            </div>
+            <div class="brand-title">DentAI</div>
+            <div class="brand-sub">Smart Dental Patient Assistant</div>
         </div>
     </div>
-    """,
-    unsafe_allow_html=True,
-)
+    """, unsafe_allow_html=True)
 
-# ----------------------------------------------------------------------------
-# Session state + example questions (bilingual quick-fill chips)
-# ----------------------------------------------------------------------------
-if "question" not in st.session_state:
-    st.session_state.question = ""
+with top_right:
+    c1, c2, c3 = st.columns(3)
+    with c1:
+        if st.button(f"🛡️ Strict", key="pill_strict",
+                     use_container_width=True,
+                     type="primary" if st.session_state.mode == "strict" else "secondary"):
+            set_mode("strict"); st.rerun()
+    with c2:
+        if st.button(f"📋 Better", key="pill_better",
+                     use_container_width=True,
+                     type="primary" if st.session_state.mode == "better" else "secondary"):
+            set_mode("better"); st.rerun()
+    with c3:
+        if st.button(f"⚡ Weak", key="pill_weak",
+                     use_container_width=True,
+                     type="primary" if st.session_state.mode == "weak" else "secondary"):
+            set_mode("weak"); st.rerun()
 
-EXAMPLES = [
-    "How should I take care of my new crown or bridge?",
-    "How do I know if my gum disease treatment is actually working?",
-    "Can I drink coffee while my aligner trays are in?",
-    "Is it okay to sleep with my new dentures in?",
-    "لبسي الجديد بيوجعني، ده طبيعي ولا لأ؟",
-    "امتى المفروض اروح تاني بعد خلع الضرس؟",
-]
+st.markdown("<br>", unsafe_allow_html=True)
 
-with st.sidebar:
-    st.markdown('<div class="drx-side-title">Example questions</div>', unsafe_allow_html=True)
-    st.markdown(
-        '<div class="drx-side-sub">Tap a question to try it — in English or Egyptian Arabic.</div>',
-        unsafe_allow_html=True,
-    )
-    for i, ex in enumerate(EXAMPLES):
-        if st.button(ex, key=f"ex_{i}", use_container_width=True):
-            st.session_state.question = ex
+# ---------------------------------------------------------------------------
+# Show hero + cards + suggestions ONLY if no conversation started yet
+# ---------------------------------------------------------------------------
+if not st.session_state.messages:
+
+    # Hero
+    st.markdown("""
+    <div class="hero">
+        <h1>Welcome to DentAI</h1>
+        <p>Your AI-powered dental patient education assistant. Ask any dental</p>
+        <p>question and get grounded, cited answers.</p>
+        <div class="lang">🌍 Supports English & Arabic (including Egyptian dialect)</div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    # Mode cards
+    m = st.session_state.mode
+    c1, c2, c3 = st.columns(3)
+    with c1:
+        st.markdown(f"""
+        <div class="card {'active' if m=='strict' else ''}">
+            <div class="ico">🛡️</div>
+            <h3>Strict Mode</h3>
+            <p>Full grounding with role, evidence boundaries, citations,
+            conflict resolution, and language detection.</p>
+        </div>
+        """, unsafe_allow_html=True)
+    with c2:
+        st.markdown(f"""
+        <div class="card {'active' if m=='better' else ''}">
+            <div class="ico">📋</div>
+            <h3>Better Mode</h3>
+            <p>Adds grounding rules and citation requirements with free-form prose output.</p>
+        </div>
+        """, unsafe_allow_html=True)
+    with c3:
+        st.markdown(f"""
+        <div class="card {'active' if m=='weak' else ''}">
+            <div class="ico">⚡</div>
+            <h3>Weak Mode</h3>
+            <p>Simple context dump with no rules — the model is free to hallucinate.</p>
+        </div>
+        """, unsafe_allow_html=True)
+
+    # Suggested questions
+    st.markdown('<div class="section-label">TRY ASKING</div>', unsafe_allow_html=True)
+
+    suggestions = [
+        "How should I take care of my new crown?",
+        "What should I do after a tooth extraction?",
+        "Is teeth whitening safe?",
+        "When should my child first visit the dentist?",
+        "ازاي أعرف ان علاج اللثة بدأ يجيب نتيجة؟",
+        "ايه اللي المفروض اعمله بعد خلع السنة؟",
+    ]
+
+    picked = None
+    for i in range(0, len(suggestions), 2):
+        col_a, col_b = st.columns(2)
+        with col_a:
+            q = suggestions[i]
+            cls = "rtl" if is_arabic(q) else ""
+            if st.button(q, key=f"sug_{i}", use_container_width=True):
+                picked = q
+        if i + 1 < len(suggestions):
+            with col_b:
+                q2 = suggestions[i+1]
+                if st.button(q2, key=f"sug_{i+1}", use_container_width=True):
+                    picked = q2
+
+    if picked:
+        st.session_state.messages.append({"role": "user", "content": picked})
+        with st.spinner("Thinking..."):
+            ans, sources = answer_question(picked, style=st.session_state.mode)
+        st.session_state.messages.append({"role": "assistant", "content": ans, "sources": sources})
+        st.rerun()
+
+# ---------------------------------------------------------------------------
+# Conversation view
+# ---------------------------------------------------------------------------
+else:
+    for msg in st.session_state.messages:
+        rtl = "rtl" if is_arabic(msg["content"]) else ""
+        if msg["role"] == "user":
+            st.markdown(f'<div class="msg-user {rtl}">{msg["content"]}</div>',
+                        unsafe_allow_html=True)
+        else:
+            st.markdown(f'<div class="msg-bot {rtl}">{msg["content"]}</div>',
+                        unsafe_allow_html=True)
+            if msg.get("sources"):
+                with st.expander(f"📚 View {len(msg['sources'])} source(s)"):
+                    for i, s in enumerate(msg["sources"], 1):
+                        title = s.get("title") or s.get("source") or f"Source {i}"
+                        status = s.get("status", "")
+                        txt = s.get("text", "")
+                        st.markdown(f"**[{i}] {title}** · _{status}_")
+                        st.write(txt[:400] + ("…" if len(txt) > 400 else ""))
+                        st.markdown("---")
+
+    col_clear, _ = st.columns([1, 5])
+    with col_clear:
+        if st.button("🗑️ New chat"):
+            st.session_state.messages = []
             st.rerun()
 
-# ----------------------------------------------------------------------------
-# Question input
-# ----------------------------------------------------------------------------
-st.markdown('<div class="drx-card">', unsafe_allow_html=True)
-st.markdown('<div class="drx-label">Your question · سؤالك</div>', unsafe_allow_html=True)
-question = st.text_area(
-    "Your question",
-    key="question",
-    height=100,
-    label_visibility="collapsed",
-    placeholder="Ask in English, or اسأل بالعامية المصرية...",
-)
-if rag.is_arabic(question):
-    st.caption("🇪🇬 هيتم الرد بالعامية المصرية بناءً على المصادر المتاحة.")
-ask = st.button("Answer · جاوبني", type="primary")
-st.markdown("</div>", unsafe_allow_html=True)
+# ---------------------------------------------------------------------------
+# Bottom input bar (always visible)
+# ---------------------------------------------------------------------------
+user_input = st.chat_input("Ask a dental question... (English or Arabic)")
+if user_input:
+    st.session_state.messages.append({"role": "user", "content": user_input})
+    with st.spinner("Thinking..."):
+        ans, sources = answer_question(user_input, style=st.session_state.mode)
+    st.session_state.messages.append({"role": "assistant", "content": ans, "sources": sources})
+    st.rerun()
 
-# ----------------------------------------------------------------------------
-# Answer + sources
-# ----------------------------------------------------------------------------
-if ask and question.strip():
-    if not rag.OPENROUTER_API_KEY:
-        st.warning(
-            "OPENROUTER_API_KEY is not configured — showing a grounded extractive fallback. "
-            "Add your key in Streamlit → Manage app → Secrets for full LLM answers."
-        )
-    with st.spinner("Retrieving context and generating a grounded answer..."):
-        answer, sources = rag.answer_question(question)
-
-    rtl_class = " rtl" if rag.is_arabic(answer) else ""
-    head_label = "الإجابة" if rag.is_arabic(answer) else "Answer"
-    st.markdown(
-        f"""
-        <div class="drx-answer-card{rtl_class}">
-            <div class="drx-answer-head">{head_label}</div>
-            {answer}
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
-
-    st.markdown("<br>", unsafe_allow_html=True)
-
-    sources_label = f"المصادر المستخدمة ({len(sources)})" if rag.is_arabic(answer) else f"Sources used ({len(sources)})"
-    with st.expander(sources_label, expanded=True):
-        if not sources:
-            st.write(
-                "مفيش مصدر حالي كفاية يجاوب على السؤال ده."
-                if rag.is_arabic(answer)
-                else "No sufficiently relevant CURRENT source was found."
-            )
-        for number, e in enumerate(sources, start=1):
-            outdated = not e["is_current"]
-            status = "OUTDATED" if outdated else "CURRENT"
-            num_class = "outdated" if outdated else ""
-            st.markdown(
-                f"""
-                <div class="drx-src">
-                    <div class="drx-src-num {num_class}">{number}</div>
-                    <div>
-                        <div class="drx-src-title">{e['title']}</div>
-                        <div class="drx-src-meta">{status} · updated {e['effective_date']}</div>
-                        <div class="drx-src-text">{e['text']}</div>
-                    </div>
-                </div>
-                """,
-                unsafe_allow_html=True,
-            )
-
+# ---------------------------------------------------------------------------
+# Footer note
+# ---------------------------------------------------------------------------
+mode_ico, mode_name = MODE_LABELS[st.session_state.mode]
 st.markdown(
-    '<div class="drx-footer">For education only — not a substitute for professional dental advice. '
-    "Call your clinic for anything urgent.</div>",
+    f'<div class="footer-note">Answers are grounded in retrieved dental sources. '
+    f'Mode: {mode_ico} <b>{mode_name}</b> · Not a substitute for professional dental advice.</div>',
     unsafe_allow_html=True,
 )
