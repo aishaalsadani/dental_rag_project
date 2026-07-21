@@ -101,22 +101,22 @@ Rules:
   should contact the clinic.
 - Do not prescribe medication doses or diagnose specific conditions.
 - For emergencies (severe swelling, trauma, uncontrolled bleeding), tell them to seek urgent care.
+- DO NOT add any "SOURCES USED" line or citations. Just give the answer directly.
 
 Language rule:
 - Detect the language/dialect of the question and reply in the same one.
 - Egyptian colloquial Arabic ("ازاي","عايز","بتاع","مش","ايه") -> reply in العامية المصرية.
 - Modern Standard Arabic -> reply in فصحى.
 - English -> reply in English.
-- Translate the labels naturally:
-    English -> "ANSWER:" / "SOURCES USED:"
-    فصحى    -> "الإجابة:" / "المصادر المستخدمة:"
-    مصري    -> "الإجابة:" / "المصادر اللي اتستخدمت:"
+- Start with the label naturally:
+    English -> "ANSWER:"
+    فصحى    -> "الإجابة:"
+    مصري    -> "الإجابة:"
 
 Patient question: {question}
 
-Reply in this format (labels translated as above):
-ANSWER: <your helpful general-knowledge answer>
-SOURCES USED: general knowledge"""
+Reply in this format:
+ANSWER: <your helpful general-knowledge answer>"""
 
 
 # ---------------------------------------------------------------------------
