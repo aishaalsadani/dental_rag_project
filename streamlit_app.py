@@ -4,10 +4,8 @@ DentAI - Smart Dental Patient Assistant (professional modern UI).
 """
 
 import os
-import time
 import importlib.util
 from pathlib import Path
-from datetime import datetime
 
 import streamlit as st
 
@@ -44,22 +42,44 @@ st.set_page_config(
 )
 
 # ---------------------------------------------------------------------------
-# CSS — light, modern, professional
+# CSS
 # ---------------------------------------------------------------------------
 st.markdown("""
 <style>
+/* ---- HIDE STREAMLIT HEADER & MENU COMPLETELY ---- */
+header[data-testid="stHeader"] {
+    display: none !important;
+    height: 0 !important;
+    visibility: hidden !important;
+}
+[data-testid="stToolbar"] {
+    display: none !important;
+    visibility: hidden !important;
+}
+#MainMenu, footer, [data-testid="stStatusWidget"],
+[data-testid="stDecoration"] { 
+    display: none !important;
+    visibility: hidden !important;
+}
+
 /* ---- FORCE LIGHT THEME EVERYWHERE ---- */
 html, body, [data-testid="stAppViewContainer"], .stApp,
-[data-testid="stHeader"], [data-testid="stToolbar"],
 [data-testid="stBottomBlockContainer"], [data-testid="stBottom"],
 [data-testid="stChatInputContainer"], .main, section.main {
     background: #f5f7fb !important;
     background-color: #f5f7fb !important;
     color: #0f172a !important;
 }
-header[data-testid="stHeader"] { background: transparent !important; }
-#MainMenu, footer, [data-testid="stStatusWidget"] { visibility: hidden; }
-.block-container { padding-top: 1.2rem; padding-bottom: 8rem; max-width: 1100px; }
+
+.stApp {
+    margin-top: 0 !important;
+}
+
+.block-container { 
+    padding-top: 1.5rem !important; 
+    padding-bottom: 8rem !important; 
+    max-width: 1100px !important; 
+}
 
 /* ---- TOP BAR (brand + pills) ---- */
 .brand { display: flex; align-items: center; gap: 12px; padding: 6px 4px; }
@@ -73,28 +93,30 @@ header[data-testid="stHeader"] { background: transparent !important; }
 .brand-sub   { font-size: 13px; color:#64748b; }
 
 /* ---- HERO ---- */
-.hero { text-align:center; margin: 10px 0 30px 0; }
-.hero h1 { font-size: 30px; font-weight: 800; color:#0f172a; margin-bottom: 10px; }
-.hero p  { font-size: 16px; color:#475569; margin: 4px 0; }
-.hero .lang { color:#2563eb; font-size: 14px; margin-top: 6px; }
+.hero { text-align:center; margin: 30px 0 20px 0; }
+.hero h1 { font-size: 32px; font-weight: 800; color:#0f172a; margin-bottom: 12px; }
+.hero p  { font-size: 16px; color:#475569; margin: 4px 0; line-height: 1.6; }
+.hero .lang { color:#2563eb; font-size: 14px; margin-top: 10px; font-weight: 500; }
 
-/* ---- MODE CARDS ---- */
-.card {
-    background:#fff; border:1px solid #e6ebf3; border-radius:14px;
-    padding:22px; height:100%; transition:.15s;
-    box-shadow: 0 1px 2px rgba(15,23,42,.03);
+/* ---- MODE DESCRIPTION (single line, dynamic) ---- */
+.mode-desc {
+    text-align: center;
+    background: #eff6ff;
+    border: 1px solid #bfdbfe;
+    border-radius: 12px;
+    padding: 14px 20px;
+    margin: 20px auto;
+    max-width: 700px;
+    color: #1e40af;
+    font-size: 14px;
+    line-height: 1.6;
 }
-.card:hover { border-color:#cbd5e1; }
-.card.active { border:2px solid #3b82f6; background:#eff6ff; }
-.card .ico { font-size: 24px; margin-bottom: 10px; }
-.card h3 { font-size:17px; font-weight:700; color:#0f172a; margin: 4px 0 8px 0; }
-.card.active h3 { color:#1d4ed8; }
-.card p  { font-size:13.5px; color:#64748b; line-height:1.5; margin:0; }
+.mode-desc b { color: #1d4ed8; }
 
 /* ---- SUGGESTIONS ---- */
 .section-label {
     text-align:center; font-size:12px; font-weight:700; letter-spacing:2px;
-    color:#94a3b8; margin: 34px 0 14px 0;
+    color:#94a3b8; margin: 30px 0 14px 0;
 }
 div.stButton > button {
     width:100%; background:#fff !important; color:#334155 !important;
@@ -187,7 +209,7 @@ div.stButton > button[kind="primary"] {
     text-align:center; color:#64748b; font-size:13px; margin-top: 14px;
 }
 
-/* ---- CHAT INPUT BAR - AGGRESSIVE LIGHT OVERRIDE ---- */
+/* ---- CHAT INPUT BAR - LIGHT ---- */
 [data-testid="stBottom"],
 [data-testid="stBottomBlockContainer"],
 [data-testid="stBottom"] > div,
@@ -243,11 +265,12 @@ div[data-baseweb="base-input"] {
     color: #fff !important;
 }
 
-/* Kill any dark leftovers from Streamlit */
+/* Kill any dark leftovers */
 div[style*="background-color: rgb(14, 17, 23)"],
 div[style*="background: rgb(14, 17, 23)"],
 div[style*="background-color: rgb(38, 39, 48)"],
-div[style*="background: rgb(38, 39, 48)"] {
+div[style*="background: rgb(38, 39, 48)"],
+div[style*="background-color: black"] {
     background: #f5f7fb !important;
     background-color: #f5f7fb !important;
 }
@@ -268,6 +291,12 @@ MODE_LABELS = {
     "strict": ("🛡️", "Strict"),
     "better": ("📋", "Better"),
     "weak":   ("⚡", "Weak"),
+}
+
+MODE_DESCRIPTIONS = {
+    "strict": "🛡️ <b>Strict Mode:</b> Full grounding with role, evidence boundaries, citations, conflict resolution, and language detection.",
+    "better": "📋 <b>Better Mode:</b> Adds grounding rules and citation requirements with free-form prose output.",
+    "weak":   "⚡ <b>Weak Mode:</b> Simple context dump with no rules — the model is free to hallucinate.",
 }
 
 # ---------------------------------------------------------------------------
@@ -300,48 +329,24 @@ with top_right:
                      type="primary" if st.session_state.mode == "weak" else "secondary"):
             set_mode("weak"); st.rerun()
 
-st.markdown("<br>", unsafe_allow_html=True)
-
 # ---------------------------------------------------------------------------
 # Welcome view
 # ---------------------------------------------------------------------------
 if not st.session_state.messages:
     st.markdown("""
     <div class="hero">
-        <h1>Welcome to DentAI</h1>
-        <p>Your AI-powered dental patient education assistant. Ask any dental</p>
-        <p>question and get grounded, cited answers.</p>
+        <h1>Welcome to DentAI 🦷</h1>
+        <p>Your AI-powered dental patient education assistant.</p>
+        <p>Ask any dental question and get grounded, cited answers.</p>
         <div class="lang">🌍 Supports English & Arabic (including Egyptian dialect)</div>
     </div>
     """, unsafe_allow_html=True)
 
-    m = st.session_state.mode
-    c1, c2, c3 = st.columns(3)
-    with c1:
-        st.markdown(f"""
-        <div class="card {'active' if m=='strict' else ''}">
-            <div class="ico">🛡️</div>
-            <h3>Strict Mode</h3>
-            <p>Full grounding with role, evidence boundaries, citations,
-            conflict resolution, and language detection.</p>
-        </div>
-        """, unsafe_allow_html=True)
-    with c2:
-        st.markdown(f"""
-        <div class="card {'active' if m=='better' else ''}">
-            <div class="ico">📋</div>
-            <h3>Better Mode</h3>
-            <p>Adds grounding rules and citation requirements with free-form prose output.</p>
-        </div>
-        """, unsafe_allow_html=True)
-    with c3:
-        st.markdown(f"""
-        <div class="card {'active' if m=='weak' else ''}">
-            <div class="ico">⚡</div>
-            <h3>Weak Mode</h3>
-            <p>Simple context dump with no rules — the model is free to hallucinate.</p>
-        </div>
-        """, unsafe_allow_html=True)
+    # Dynamic mode description (single line based on selected mode)
+    st.markdown(
+        f'<div class="mode-desc">{MODE_DESCRIPTIONS[st.session_state.mode]}</div>',
+        unsafe_allow_html=True
+    )
 
     st.markdown('<div class="section-label">TRY ASKING</div>', unsafe_allow_html=True)
 
