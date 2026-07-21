@@ -10,6 +10,11 @@ Three prompt styles (Task 5) + grounded LLM generation (Lab 9) via OpenRouter.
              the deployed assistant ships, so every answer both USES the retrieved
              context and CITES its sources.
 
+Language handling: the STRICT prompt now instructs the model to detect the language
+and dialect of the patient's question and reply in kind, with a specific rule for
+Egyptian Arabic (العامية المصرية) so patients who write in "مصري" get a natural,
+colloquial answer instead of Modern Standard Arabic or English.
+
 The API key is NEVER hardcoded: it is read from the environment (local .env) or, when
 deployed, injected by streamlit_app.py from Streamlit secrets into OPENROUTER_API_KEY /
 OPENROUTER_MODEL below. If no key is present the module returns a clearly-labeled
@@ -17,6 +22,7 @@ extractive fallback so the pipeline still runs end-to-end.
 """
 
 import os
+import re
 from importlib import import_module
 
 from dotenv import load_dotenv
@@ -58,12 +64,20 @@ Rules:
 - Do not give medical advice beyond what is written in the sources.
 - Keep the answer under 150 words, in plain, patient-friendly language.
 
+Language rule:
+- Detect the language AND dialect of the patient's question, and reply in that same language/dialect.
+- If the question is written in Arabic using Egyptian colloquial expressions/spelling (Egyptian Arabic, "Masri" — e.g. "ازاي", "عايز", "بتاع", "مش", "ايه"), reply entirely in natural Egyptian colloquial Arabic (العامية المصرية), the way a friendly Egyptian dental assistant would talk to a patient. Do not switch to Modern Standard Arabic (فصحى) in that case.
+- If the question is in Modern Standard Arabic, reply in Modern Standard Arabic.
+- If the question is in English, reply in English.
+- Keep the two-part output format below in every language, but translate the labels "ANSWER" and "SOURCES USED" naturally into the reply language (e.g. Egyptian Arabic: "الإجابة" and "المصادر اللي اتستخدمت").
+- Citations like [1], [2] stay in the same numeric format regardless of language.
+
 Context package:
 {context}
 
 Patient question: {question}
 
-Respond in exactly this two-part format:
+Respond in exactly this two-part format (translate the labels into the reply language as instructed above):
 ANSWER: <your grounded answer, with inline citations like [1]>
 SOURCES USED: <comma-separated list of the source numbers you actually relied on>"""
 
@@ -73,8 +87,29 @@ def build_prompt(question, context_text, style="strict"):
     return template.format(context=context_text, question=question)
 
 
-def _extractive_fallback(evidence):
+_ARABIC_RE = re.compile(r"[\u0600-\u06FF]")
+
+
+def is_arabic(text):
+    """True if the text contains Arabic-script characters (used for RTL display)."""
+    return bool(_ARABIC_RE.search(text or ""))
+
+
+def _extractive_fallback(evidence, question=""):
     """Grounded, citation-preserving answer used only when no API key is configured."""
+    if is_arabic(question):
+        if not evidence:
+            return ("الإجابة: للأسف مفيش معلومات كفاية في المصادر الحالية عشان أجاوبك "
+                     "بدقة. تقدر تتصل بالعيادة عشان تتأكد.\nالمصادر اللي اتستخدمت: لا يوجد")
+        lines = ["الإجابة: [مفيش OPENROUTER_API_KEY متظبط -- ده رد مبني على المصادر مباشرة] بناءً على المصادر الحالية:"]
+        used = []
+        for i, e in enumerate(evidence, start=1):
+            snippet = " ".join(e["text"].split()[:40])
+            lines.append(f"- {snippet} [{i}]")
+            used.append(str(i))
+        lines.append("المصادر اللي اتستخدمت: " + "، ".join(used))
+        return "\n".join(lines)
+
     if not evidence:
         return ("ANSWER: I don't have enough information in the current sources to answer "
                 "that. Please call the clinic.\nSOURCES USED: none")
@@ -105,7 +140,7 @@ def answer_question(question, style="strict"):
     prompt = build_prompt(question, context_text, style=style)
 
     if not OPENROUTER_API_KEY:
-        return _extractive_fallback(evidence), evidence
+        return _extractive_fallback(evidence, question), evidence
 
     try:
         return ask_openrouter(prompt), evidence
@@ -117,6 +152,7 @@ if __name__ == "__main__":
     for q in [
         "How should I take care of my new crown or bridge?",
         "How do I know if my gum disease treatment is actually working?",
+        "ازاي اعرف ان علاج اللثة بتاعي بيشتغل فعلا؟",
     ]:
         ans, sources = answer_question(q)
         print(f"Q: {q}\n{ans}\n{'-' * 80}")
