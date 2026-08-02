@@ -1,12 +1,12 @@
 """
 streamlit_app.py
+
 DentAI - Smart Dental Patient Assistant (patient-friendly UI).
 """
 
 import os
 import importlib.util
 from pathlib import Path
-
 import streamlit as st
 
 # ---------------------------------------------------------------------------
@@ -25,14 +25,14 @@ except Exception:
 # not on every st.rerun() triggered by buttons, chat input, mode switches, etc.)
 # ---------------------------------------------------------------------------
 @st.cache_resource(show_spinner="Loading models...")
-def _load_prompting_module():
+def load_prompting_module():
     here = Path(__file__).parent
     spec = importlib.util.spec_from_file_location("prompting", here / "07_prompting.py")
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
 
-prompting = _load_prompting_module()
+prompting = load_prompting_module()
 answer_question = prompting.answer_question
 is_arabic = prompting.is_arabic
 
@@ -75,11 +75,9 @@ html, body, [data-testid="stAppViewContainer"], .stApp,
     background-color: #f5f7fb !important;
     color: #0f172a !important;
 }
-
 .stApp {
     margin-top: 0 !important;
 }
-
 .block-container { 
     padding-top: 1.5rem !important; 
     padding-bottom: 8rem !important; 
@@ -228,11 +226,9 @@ div[data-baseweb="base-input"] {
     background: #f5f7fb !important;
     background-color: #f5f7fb !important;
 }
-
 [data-testid="stBottom"], [data-testid="stBottomBlockContainer"] {
     border-top: 1px solid #e6ebf3 !important;
 }
-
 [data-testid="stChatInput"] {
     background: #ffffff !important;
     border: 1.5px solid #cbd5e1 !important;
@@ -290,7 +286,8 @@ if "mode" not in st.session_state:
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
-def set_mode(m): st.session_state.mode = m
+def set_mode(m): 
+    st.session_state.mode = m
 
 MODE_LABELS = {
     "strict": ("🛡️", "Safe"),
@@ -307,141 +304,3 @@ MODE_DESCRIPTIONS = {
 # ---------------------------------------------------------------------------
 # Top bar
 # ---------------------------------------------------------------------------
-top_left, top_right = st.columns([2, 3])
-with top_left:
-    st.markdown("""
-    <div class="brand">
-        <div class="brand-logo">🦷</div>
-        <div>
-            <div class="brand-title">DentAI</div>
-            <div class="brand-sub">Smart Dental Patient Assistant</div>
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
-
-with top_right:
-    c1, c2, c3 = st.columns(3)
-    with c1:
-        if st.button("🛡️ Safe", key="pill_strict", use_container_width=True,
-                     type="primary" if st.session_state.mode == "strict" else "secondary"):
-            set_mode("strict"); st.rerun()
-    with c2:
-        if st.button("📋 Balanced", key="pill_better", use_container_width=True,
-                     type="primary" if st.session_state.mode == "better" else "secondary"):
-            set_mode("better"); st.rerun()
-    with c3:
-        if st.button("⚡ Quick", key="pill_weak", use_container_width=True,
-                     type="primary" if st.session_state.mode == "weak" else "secondary"):
-            set_mode("weak"); st.rerun()
-
-# ---------------------------------------------------------------------------
-# Welcome view
-# ---------------------------------------------------------------------------
-if not st.session_state.messages:
-    st.markdown("""
-    <div class="hero">
-        <h1>👋 Hi! I'm DentAI</h1>
-        <p>Your friendly dental assistant. Ask me anything about your teeth,</p>
-        <p>gums, treatments, or dental care — I'm here to help!</p>
-        <div class="lang">🌍 You can ask in English or Arabic (العربية والمصري)</div>
-    </div>
-    """, unsafe_allow_html=True)
-
-    # Dynamic mode description (single line based on selected mode)
-    st.markdown(
-        f'<div class="mode-desc">{MODE_DESCRIPTIONS[st.session_state.mode]}</div>',
-        unsafe_allow_html=True
-    )
-
-    st.markdown('<div class="section-label">TRY ASKING</div>', unsafe_allow_html=True)
-
-    suggestions = [
-        "How should I take care of my new crown?",
-        "What should I do after a tooth extraction?",
-        "Is teeth whitening safe?",
-        "When should my child first visit the dentist?",
-        "ازاي اعرف ان علاج اللثة بتاعي بيشتغل؟",
-        "ايه اللي المفروض اعمله بعد خلع السنة؟",
-    ]
-
-    picked = None
-    for i in range(0, len(suggestions), 2):
-        col_a, col_b = st.columns(2)
-        with col_a:
-            if st.button(suggestions[i], key=f"sug_{i}", use_container_width=True):
-                picked = suggestions[i]
-        if i + 1 < len(suggestions):
-            with col_b:
-                if st.button(suggestions[i+1], key=f"sug_{i+1}", use_container_width=True):
-                    picked = suggestions[i+1]
-
-    if picked:
-        st.session_state.messages.append({"role": "user", "content": picked})
-        try:
-            with st.spinner("Thinking..."):
-                ans, sources = answer_question(picked, style=st.session_state.mode)
-        except Exception as e:
-            ans, sources = f"⚠️ Sorry, something went wrong: {str(e)}", []
-        st.session_state.messages.append({"role": "assistant", "content": ans, "sources": sources})
-        st.rerun()
-
-# ---------------------------------------------------------------------------
-# Chat view
-# ---------------------------------------------------------------------------
-else:
-    for msg in st.session_state.messages:
-        rtl = "rtl" if is_arabic(msg["content"]) else ""
-        if msg["role"] == "user":
-            st.markdown(f'<div class="msg-user {rtl}">{msg["content"]}</div>',
-                        unsafe_allow_html=True)
-        else:
-            html_content = msg["content"].replace("\n", "<br>")
-            st.markdown(f'<div class="msg-bot {rtl}">{html_content}</div>',
-                        unsafe_allow_html=True)
-            if msg.get("sources"):
-                with st.expander(f"📚 View {len(msg['sources'])} source(s)"):
-                    for i, s in enumerate(msg["sources"], 1):
-                        title = s.get("title") or s.get("source") or f"Source {i}"
-                        status = s.get("status", "")
-                        txt = s.get("text", "")
-                        st.markdown(f"**[{i}] {title}** · _{status}_")
-                        st.write(txt[:400] + ("…" if len(txt) > 400 else ""))
-                        if i < len(msg["sources"]):
-                            st.markdown("---")
-
-    # New chat button
-    st.markdown('<div class="newchat-wrap">', unsafe_allow_html=True)
-    col_a, col_b, col_c = st.columns([6, 2, 6])
-    with col_b:
-        if st.button("↻ New chat", key="new_chat_btn"):
-            st.session_state.messages = []
-            st.rerun()
-    st.markdown('</div>', unsafe_allow_html=True)
-
-# ---------------------------------------------------------------------------
-# Input
-# ---------------------------------------------------------------------------
-user_input = st.chat_input("Ask a dental question... (English or Arabic)")
-if user_input:
-    if len(user_input.strip()) < 3:
-        st.warning("⚠️ Please ask a more detailed question.")
-    else:
-        st.session_state.messages.append({"role": "user", "content": user_input})
-        try:
-            with st.spinner("Thinking..."):
-                ans, sources = answer_question(user_input, style=st.session_state.mode)
-        except Exception as e:
-            ans, sources = f"⚠️ Sorry, something went wrong: {str(e)}", []
-        st.session_state.messages.append({"role": "assistant", "content": ans, "sources": sources})
-        st.rerun()
-
-# ---------------------------------------------------------------------------
-# Footer
-# ---------------------------------------------------------------------------
-mode_ico, mode_name = MODE_LABELS[st.session_state.mode]
-st.markdown(
-    f'<div class="footer-note">💙 Answers based on trusted dental sources · '
-    f'Currently in {mode_ico} <b>{mode_name}</b> mode · '
-    f'Always consult your dentist for personal advice.</div>',
-    unsafe_allow_html=True,
-)
