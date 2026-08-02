@@ -111,7 +111,6 @@ def hybrid_search(query, top_k=8, alpha=DEFAULT_ALPHA):
         for i in order
     ]
 
-
 if __name__ == "__main__":
     print("SEMANTIC_MODE:", SEMANTIC_MODE, "| chunks:", len(chunks))
     q = "How do I know if my gum disease treatment is actually working?"
