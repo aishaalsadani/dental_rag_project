@@ -31,10 +31,7 @@ spec.loader.exec_module(prompting)
 answer_question = prompting.answer_question
 is_arabic = prompting.is_arabic
 
-answer_question = prompting.answer_question
-is_arabic = prompting.is_arabic
-
-# --- TEMP DEBUG: raw semantic scores (احذفيها بعد التشخيص) ---
+# --- TEMP DEBUG: raw semantic scores (احذفي القسم ده بعد التشخيص) ---
 import importlib.util as _ilu
 _vec_spec = _ilu.spec_from_file_location("vectors_debug", HERE / "04_vector_representation.py")
 _vec_mod = _ilu.module_from_spec(_vec_spec)
@@ -47,6 +44,7 @@ def _debug_scores(question):
         rows.append((row["title"], raw, hybrid))
     return rows
 # --- END TEMP DEBUG ---
+
 # ---------------------------------------------------------------------------
 # Page config
 # ---------------------------------------------------------------------------
@@ -296,6 +294,8 @@ div[style*="background-color: black"] {
 # ---------------------------------------------------------------------------
 # Session state
 # ---------------------------------------------------------------------------
+DEBUG_MODE = True   # TEMP: خليها False أو امسحيها بعد التشخيص
+
 if "mode" not in st.session_state:
     st.session_state.mode = "strict"
 if "messages" not in st.session_state:
@@ -393,7 +393,9 @@ if not st.session_state.messages:
                 ans, sources = answer_question(picked, style=st.session_state.mode)
         except Exception as e:
             ans, sources = f"⚠️ Sorry, something went wrong: {str(e)}", []
-        st.session_state.messages.append({"role": "assistant", "content": ans, "sources": sources})
+        st.session_state.messages.append({
+            "role": "assistant", "content": ans, "sources": sources, "_orig_question": picked
+        })
         st.rerun()
 
 # ---------------------------------------------------------------------------
@@ -409,6 +411,12 @@ else:
             html_content = msg["content"].replace("\n", "<br>")
             st.markdown(f'<div class="msg-bot {rtl}">{html_content}</div>',
                         unsafe_allow_html=True)
+
+            if DEBUG_MODE and msg.get("_orig_question"):
+                with st.expander("🔧 DEBUG raw scores"):
+                    for title, raw, hybrid in _debug_scores(msg["_orig_question"]):
+                        st.write(f"{title[:60]} — raw={raw:.3f}  hybrid={hybrid:.3f}")
+
             if msg.get("sources"):
                 with st.expander(f"📚 View {len(msg['sources'])} source(s)"):
                     for i, s in enumerate(msg["sources"], 1):
@@ -443,7 +451,9 @@ if user_input:
                 ans, sources = answer_question(user_input, style=st.session_state.mode)
         except Exception as e:
             ans, sources = f"⚠️ Sorry, something went wrong: {str(e)}", []
-        st.session_state.messages.append({"role": "assistant", "content": ans, "sources": sources})
+        st.session_state.messages.append({
+            "role": "assistant", "content": ans, "sources": sources, "_orig_question": user_input
+        })
         st.rerun()
 
 # ---------------------------------------------------------------------------
