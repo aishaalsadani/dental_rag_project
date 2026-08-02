@@ -30,8 +30,15 @@ def is_near_duplicate(text_a, text_b, threshold=0.85):
     return SequenceMatcher(None, text_a, text_b).ratio() >= threshold
 
 
-def build_context(query, pool_size=10, alpha=0.6, min_score=0.02, max_words=150):
+def build_context(query, pool_size=10, alpha=0.6, min_score=0.15, max_words=150):
     candidates = hybrid_search(query, top_k=pool_size, alpha=alpha)
+    if not candidates:
+        return []
+
+    top_score = candidates[0][1]
+    # لو أعلى نتيجة أصلاً ضعيفة، معنى كده مفيش مصدر حقيقي مرتبط بالسؤال
+    if top_score < min_score:
+        return []
 
     evidence = []
     for cid, score in candidates:
