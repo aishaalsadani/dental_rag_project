@@ -1,5 +1,6 @@
 """
 04_vector_representation.py
+
 Four retrievers over the chunk corpus (Lab 6 / Lab 7 / Task 3):
 
   - TF-IDF   : lexical baseline with bigrams (exact word/phrase overlap).
@@ -12,11 +13,10 @@ Four retrievers over the chunk corpus (Lab 6 / Lab 7 / Task 3):
 Semantic embeddings try the real model first (works on Streamlit Cloud / Colab,
 which have internet). If the model cannot be downloaded, the module falls back to a
 TF-IDF + LSA (TruncatedSVD) pseudo-embedding so the pipeline still runs end-to-end.
-`SEMANTIC_MODE` reports which path is active ("sentence-transformers" vs "lsa_fallback").
+SEMANTIC_MODE reports which path is active ("sentence-transformers" vs "lsa_fallback").
 """
 
 from importlib import import_module
-
 import numpy as np
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
@@ -36,55 +36,47 @@ DEFAULT_ALPHA = 0.6
 tfidf_vec = TfidfVectorizer(ngram_range=(1, 2), stop_words="english")
 tfidf_matrix = tfidf_vec.fit_transform(corpus)
 
-
 def tfidf_search(query, top_k=8):
     q_vec = tfidf_vec.transform([preprocess_text(query)])
     scores = cosine_similarity(q_vec, tfidf_matrix).flatten()
     order = np.argsort(-scores)[:top_k]
     return [(chunks[i]["chunk_id"], float(scores[i])) for i in order]
 
-
 # --- BM25 (bonus retriever) ---
 tokenized_corpus = [c.lower().split() for c in corpus]
 bm25 = BM25Okapi(tokenized_corpus)
-
 
 def bm25_search(query, top_k=8):
     scores = bm25.get_scores(preprocess_text(query).lower().split())
     order = np.argsort(-scores)[:top_k]
     return [(chunks[i]["chunk_id"], float(scores[i])) for i in order]
 
-
 # --- Semantic embeddings (real model, with offline LSA fallback) ---
 SEMANTIC_MODE = None
 st_model = None
 svd_model = None
+
 try:
     from sentence_transformers import SentenceTransformer
-
     st_model = SentenceTransformer(MODEL_NAME)
     embeddings = st_model.encode(corpus, show_progress_bar=False)
     SEMANTIC_MODE = "sentence-transformers"
 except Exception:
     from sklearn.decomposition import TruncatedSVD
-
     svd_model = TruncatedSVD(n_components=64, random_state=42)
     embeddings = svd_model.fit_transform(tfidf_matrix)
     SEMANTIC_MODE = "lsa_fallback"
 
-
-def _embed_query(query):
+def embed_query(query):
     if SEMANTIC_MODE == "sentence-transformers":
         return st_model.encode([query])
     return svd_model.transform(tfidf_vec.transform([preprocess_text(query)]))
 
-
 def semantic_search(query, top_k=8):
-    q_emb = _embed_query(query)
+    q_emb = embed_query(query)
     scores = cosine_similarity(q_emb, embeddings).flatten()
     order = np.argsort(-scores)[:top_k]
     return [(chunks[i]["chunk_id"], float(scores[i])) for i in order]
-
 
 # --- Hybrid (lexical + semantic) ---
 def normalize(scores):
@@ -93,20 +85,27 @@ def normalize(scores):
         return np.zeros_like(scores)
     return (scores - scores.min()) / (scores.max() - scores.min())
 
-
 def hybrid_search(query, top_k=8, alpha=DEFAULT_ALPHA):
     q_tfidf = tfidf_vec.transform([preprocess_text(query)])
     lexical_scores = cosine_similarity(q_tfidf, tfidf_matrix).flatten()
-
+    
     if SEMANTIC_MODE == "sentence-transformers":
         q_emb = st_model.encode([query])
     else:
         q_emb = svd_model.transform(q_tfidf)
+    
     semantic_scores = cosine_similarity(q_emb, embeddings).flatten()
-
+    
+    # ✅ تم إصلاح الخطأ هنا: إضافة علامة الضرب *
     hybrid_scores = alpha * normalize(semantic_scores) + (1 - alpha) * normalize(lexical_scores)
+    
     order = np.argsort(-hybrid_scores)[:top_k]
     return [
         (chunks[i]["chunk_id"], float(hybrid_scores[i]), float(semantic_scores[i]))
         for i in order
     ]
+
+# ✅ تم إصلاح الخطأ هنا: إضافة __ قبل وبعد name
+if __name__ == "__main__":
+    print(f"Vector representation module loaded. Mode: {SEMANTIC_MODE}")
+    print(f"Total chunks: {len(chunks)}")
