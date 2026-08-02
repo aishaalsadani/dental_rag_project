@@ -123,14 +123,11 @@ if __name__ == "__main__":
             flag = "CURRENT" if row["is_current"] else "OUTDATED"
             print(f"  {cid:8s} (doc={row['document_id']:4s} {flag:8s}) score={score:.3f}")
 
-from importlib import import_module
-vectors = import_module("04_vector_representation")
+    q_ar = "ايه اللي المفروض اعمله بعد خلع السنة؟"
+    q_en = "What should I do after a tooth extraction?"
 
-q_ar = "ايه اللي المفروض اعمله بعد خلع السنة؟"
-q_en = "What should I do after a tooth extraction?"
-
-for label, q in [("Arabic", q_ar), ("English", q_en)]:
-    print(f"\n--- {label}: {q} ---")
-    for cid, hybrid, raw in vectors.hybrid_search(q, top_k=5):
-        row = next(c for c in vectors.chunks if c["chunk_id"] == cid)
-        print(f"  {row['title'][:50]:50s} raw_semantic={raw:.3f}")
+    for label, q in [("Arabic", q_ar), ("English", q_en)]:
+        print(f"\n--- {label}: {q} ---")
+        for cid, hybrid, raw in hybrid_search(q, top_k=5):
+            row = next(c for c in chunks if c["chunk_id"] == cid)
+            print(f"  {row['title'][:50]:50s} raw_semantic={raw:.3f}")
