@@ -29,7 +29,7 @@ CHUNKS = import_module("03_chunking").CHUNKS
 chunks = CHUNKS
 corpus = [c["search_text"] for c in CHUNKS]
 
-MODEL_NAME = "all-MiniLM-L6-v2"
+MODEL_NAME = "paraphrase-multilingual-MiniLM-L12-v2"
 DEFAULT_ALPHA = 0.6
 
 # --- TF-IDF ---
