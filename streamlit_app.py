@@ -31,6 +31,22 @@ spec.loader.exec_module(prompting)
 answer_question = prompting.answer_question
 is_arabic = prompting.is_arabic
 
+answer_question = prompting.answer_question
+is_arabic = prompting.is_arabic
+
+# --- TEMP DEBUG: raw semantic scores (احذفيها بعد التشخيص) ---
+import importlib.util as _ilu
+_vec_spec = _ilu.spec_from_file_location("vectors_debug", HERE / "04_vector_representation.py")
+_vec_mod = _ilu.module_from_spec(_vec_spec)
+_vec_spec.loader.exec_module(_vec_mod)
+
+def _debug_scores(question):
+    rows = []
+    for cid, hybrid, raw in _vec_mod.hybrid_search(question, top_k=5):
+        row = next(c for c in _vec_mod.chunks if c["chunk_id"] == cid)
+        rows.append((row["title"], raw, hybrid))
+    return rows
+# --- END TEMP DEBUG ---
 # ---------------------------------------------------------------------------
 # Page config
 # ---------------------------------------------------------------------------
