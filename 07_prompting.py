@@ -200,10 +200,8 @@ def answer_question(question, style="strict"):
         return f"[LLM call failed: {exc}]", evidence
 
     # If the model said the answer isn't in the context, return the clean refusal.
-    if _is_not_in_context(ans):
-        return _not_found_message(question), evidence
-
-    return _clean_answer(ans), evidence
+if _is_not_in_context(ans):
+        return _not_found_message(question), []
 
 
 if __name__ == "__main__":
