@@ -21,13 +21,18 @@ except Exception:
     pass
 
 # ---------------------------------------------------------------------------
-# Load 07_prompting.py
+# Load 07_prompting.py (cached so heavy imports/models load once per process,
+# not on every st.rerun() triggered by buttons, chat input, mode switches, etc.)
 # ---------------------------------------------------------------------------
-HERE = Path(__file__).parent
-spec = importlib.util.spec_from_file_location("prompting", HERE / "07_prompting.py")
-prompting = importlib.util.module_from_spec(spec)
-spec.loader.exec_module(prompting)
+@st.cache_resource(show_spinner="Loading models...")
+def _load_prompting_module():
+    here = Path(__file__).parent
+    spec = importlib.util.spec_from_file_location("prompting", here / "07_prompting.py")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
 
+prompting = _load_prompting_module()
 answer_question = prompting.answer_question
 is_arabic = prompting.is_arabic
 
