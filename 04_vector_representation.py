@@ -87,6 +87,13 @@ def semantic_search(query, top_k=8):
 
 
 # --- Hybrid (lexical + semantic) ---
+def normalize(scores):
+    scores = np.asarray(scores, dtype=float)
+    if scores.max() - scores.min() < 1e-9:
+        return np.zeros_like(scores)
+    return (scores - scores.min()) / (scores.max() - scores.min())
+
+
 def hybrid_search(query, top_k=8, alpha=DEFAULT_ALPHA):
     q_tfidf = tfidf_vec.transform([preprocess_text(query)])
     lexical_scores = cosine_similarity(q_tfidf, tfidf_matrix).flatten()
