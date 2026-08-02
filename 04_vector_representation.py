@@ -110,23 +110,3 @@ def hybrid_search(query, top_k=8, alpha=DEFAULT_ALPHA):
         (chunks[i]["chunk_id"], float(hybrid_scores[i]), float(semantic_scores[i]))
         for i in order
     ]
-
-if __name__ == "__main__":
-    print("SEMANTIC_MODE:", SEMANTIC_MODE, "| chunks:", len(chunks))
-    q = "How do I know if my gum disease treatment is actually working?"
-    for name, fn in [("TF-IDF", tfidf_search), ("BM25", bm25_search),
-                     ("Semantic", semantic_search), ("Hybrid", hybrid_search)]:
-        print(f"\n{name}:")
-        for cid, score in fn(q, top_k=5):
-            row = next(c for c in chunks if c["chunk_id"] == cid)
-            flag = "CURRENT" if row["is_current"] else "OUTDATED"
-            print(f"  {cid:8s} (doc={row['document_id']:4s} {flag:8s}) score={score:.3f}")
-
-    q_ar = "ايه اللي المفروض اعمله بعد خلع السنة؟"
-    q_en = "What should I do after a tooth extraction?"
-
-    for label, q in [("Arabic", q_ar), ("English", q_en)]:
-        print(f"\n--- {label}: {q} ---")
-        for cid, hybrid, raw in hybrid_search(q, top_k=5):
-            row = next(c for c in chunks if c["chunk_id"] == cid)
-            print(f"  {row['title'][:50]:50s} raw_semantic={raw:.3f}")
