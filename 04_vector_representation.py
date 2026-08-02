@@ -104,9 +104,12 @@ def hybrid_search(query, top_k=8, alpha=DEFAULT_ALPHA):
         q_emb = svd_model.transform(q_tfidf)
     semantic_scores = cosine_similarity(q_emb, embeddings).flatten()
 
-    hybrid_scores = alpha * normalize(semantic_scores) + (1 - alpha) * normalize(lexical_scores)
+hybrid_scores = alpha * normalize(semantic_scores) + (1 - alpha) * normalize(lexical_scores)
     order = np.argsort(-hybrid_scores)[:top_k]
-    return [(chunks[i]["chunk_id"], float(hybrid_scores[i])) for i in order]
+    return [
+        (chunks[i]["chunk_id"], float(hybrid_scores[i]), float(semantic_scores[i]))
+        for i in order
+    ]
 
 
 if __name__ == "__main__":
