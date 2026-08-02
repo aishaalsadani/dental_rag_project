@@ -1,51 +1,111 @@
 """
-05_create_chroma_store.py
-Persist the chunk embeddings + metadata into a local Chroma vector store.
+04_vector_representation.py
 
-The store path is resolved RELATIVE to this file (never a hardcoded absolute path),
-so it works both locally and on Streamlit Cloud. Run this once to (re)build the store:
+Four retrievers over the chunk corpus (Lab 6 / Lab 7 / Task 3):
 
-    python 05_create_chroma_store.py
+  - TF-IDF   : lexical baseline with bigrams (exact word/phrase overlap).
+  - BM25     : stronger lexical model (term saturation + length normalization).
+  - Semantic : SentenceTransformer("all-MiniLM-L6-v2") dense vectors, so
+               "gum disease" can match a chunk that only says "periodontal disease".
+  - Hybrid   : hybrid = alpha * semantic + (1 - alpha) * lexical, both min-max
+               normalized to [0, 1].
+
+Semantic embeddings try the real model first (works on Streamlit Cloud / Colab,
+which have internet). If the model cannot be downloaded, the module falls back to a
+TF-IDF + LSA (TruncatedSVD) pseudo-embedding so the pipeline still runs end-to-end.
+SEMANTIC_MODE reports which path is active ("sentence-transformers" vs "lsa_fallback").
 """
 
 from importlib import import_module
-from pathlib import Path
+import numpy as np
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.metrics.pairwise import cosine_similarity
+from rank_bm25 import BM25Okapi
 
-import chromadb
-from chromadb.config import Settings
+preprocess_text = import_module("02_preprocessing").preprocess_text
+CHUNKS = import_module("03_chunking").CHUNKS
 
-vectors = import_module("04_vector_representation")
+# Kept as module-level so downstream modules can index chunks by position.
+chunks = CHUNKS
+corpus = [c["search_text"] for c in CHUNKS]
 
-DB_PATH = Path(__file__).resolve().parent / "chroma_db"
-COLLECTION_NAME = "dental_patient_education"
+MODEL_NAME = "paraphrase-multilingual-MiniLM-L12-v2"
+DEFAULT_ALPHA = 0.6
 
+# --- TF-IDF ---
+tfidf_vec = TfidfVectorizer(ngram_range=(1, 2), stop_words="english")
+tfidf_matrix = tfidf_vec.fit_transform(corpus)
 
-def create_vector_store():
-    client = chromadb.PersistentClient(
-        path=str(DB_PATH),
-        settings=Settings(anonymized_telemetry=False),
-    )
-    collection = client.get_or_create_collection(COLLECTION_NAME)
+def tfidf_search(query, top_k=8):
+    q_vec = tfidf_vec.transform([preprocess_text(query)])
+    scores = cosine_similarity(q_vec, tfidf_matrix).flatten()
+    order = np.argsort(-scores)[:top_k]
+    return [(chunks[i]["chunk_id"], float(scores[i])) for i in order]
 
-    collection.upsert(
-        ids=[c["chunk_id"] for c in vectors.chunks],
-        documents=[c["text"] for c in vectors.chunks],
-        metadatas=[
-            {
-                "document_id": c["document_id"],
-                "title": c["title"],
-                "doc_type": c["doc_type"],
-                "effective_date": c["effective_date"],
-                "is_current": str(c["is_current"]),
-            }
-            for c in vectors.chunks
-        ],
-        embeddings=[list(map(float, e)) for e in vectors.embeddings],
-    )
-    return collection
+# --- BM25 (bonus retriever) ---
+tokenized_corpus = [c.lower().split() for c in corpus]
+bm25 = BM25Okapi(tokenized_corpus)
 
+def bm25_search(query, top_k=8):
+    scores = bm25.get_scores(preprocess_text(query).lower().split())
+    order = np.argsort(-scores)[:top_k]
+    return [(chunks[i]["chunk_id"], float(scores[i])) for i in order]
 
+# --- Semantic embeddings (real model, with offline LSA fallback) ---
+SEMANTIC_MODE = None
+st_model = None
+svd_model = None
+
+try:
+    from sentence_transformers import SentenceTransformer
+    st_model = SentenceTransformer(MODEL_NAME)
+    embeddings = st_model.encode(corpus, show_progress_bar=False)
+    SEMANTIC_MODE = "sentence-transformers"
+except Exception:
+    from sklearn.decomposition import TruncatedSVD
+    svd_model = TruncatedSVD(n_components=64, random_state=42)
+    embeddings = svd_model.fit_transform(tfidf_matrix)
+    SEMANTIC_MODE = "lsa_fallback"
+
+def embed_query(query):
+    if SEMANTIC_MODE == "sentence-transformers":
+        return st_model.encode([query])
+    return svd_model.transform(tfidf_vec.transform([preprocess_text(query)]))
+
+def semantic_search(query, top_k=8):
+    q_emb = embed_query(query)
+    scores = cosine_similarity(q_emb, embeddings).flatten()
+    order = np.argsort(-scores)[:top_k]
+    return [(chunks[i]["chunk_id"], float(scores[i])) for i in order]
+
+# --- Hybrid (lexical + semantic) ---
+def normalize(scores):
+    scores = np.asarray(scores, dtype=float)
+    if scores.max() - scores.min() < 1e-9:
+        return np.zeros_like(scores)
+    return (scores - scores.min()) / (scores.max() - scores.min())
+
+def hybrid_search(query, top_k=8, alpha=DEFAULT_ALPHA):
+    q_tfidf = tfidf_vec.transform([preprocess_text(query)])
+    lexical_scores = cosine_similarity(q_tfidf, tfidf_matrix).flatten()
+    
+    if SEMANTIC_MODE == "sentence-transformers":
+        q_emb = st_model.encode([query])
+    else:
+        q_emb = svd_model.transform(q_tfidf)
+    
+    semantic_scores = cosine_similarity(q_emb, embeddings).flatten()
+    
+    # ✅ تم إصلاح الخطأ هنا: إضافة علامة الضرب *
+    hybrid_scores = alpha * normalize(semantic_scores) + (1 - alpha) * normalize(lexical_scores)
+    
+    order = np.argsort(-hybrid_scores)[:top_k]
+    return [
+        (chunks[i]["chunk_id"], float(hybrid_scores[i]), float(semantic_scores[i]))
+        for i in order
+    ]
+
+# ✅ تم إصلاح الخطأ هنا: إضافة __ قبل وبعد name
 if __name__ == "__main__":
-    col = create_vector_store()
-    print(f"Chroma store created at {DB_PATH} "
-          f"(collection='{COLLECTION_NAME}', mode={vectors.SEMANTIC_MODE}).")
+    print(f"Vector representation module loaded. Mode: {SEMANTIC_MODE}")
+    print(f"Total chunks: {len(chunks)}")
