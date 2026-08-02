@@ -30,19 +30,21 @@ def is_near_duplicate(text_a, text_b, threshold=0.85):
     return SequenceMatcher(None, text_a, text_b).ratio() >= threshold
 
 
-def build_context(query, pool_size=10, alpha=0.6, min_score=0.15, max_words=150):
+def build_context(query, pool_size=10, alpha=0.6, min_raw_score=0.25, max_words=150):
     candidates = hybrid_search(query, top_k=pool_size, alpha=alpha)
     if not candidates:
         return []
 
-    top_score = candidates[0][1]
-    # لو أعلى نتيجة أصلاً ضعيفة، معنى كده مفيش مصدر حقيقي مرتبط بالسؤال
-    if top_score < min_score:
+    # نفلتر على الـ raw semantic score (قبل الـ normalize) - ده المقياس
+    # المطلق الحقيقي للتشابه، عكس الـ hybrid score اللي بيتطبّع نسبيًا لكل
+    # سؤال لوحده وممكن يبان "عالي" حتى لو مفيش تطابق حقيقي.
+    top_raw = candidates[0][2]
+    if top_raw < min_raw_score:
         return []
 
     evidence = []
-    for cid, score in candidates:
-        if score < min_score:
+    for cid, hybrid_score, raw_score in candidates:
+        if raw_score < min_raw_score:
             continue
         row = _CHUNK_BY_ID[cid]
         evidence.append(
@@ -54,7 +56,7 @@ def build_context(query, pool_size=10, alpha=0.6, min_score=0.15, max_words=150)
                 "effective_date": row["effective_date"],
                 "is_current": bool(row["is_current"]),
                 "text": row["text"],
-                "score": float(score),
+                "score": float(hybrid_score),
             }
         )
 
