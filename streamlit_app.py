@@ -23,6 +23,10 @@ except Exception:
 # ---------------------------------------------------------------------------
 # Load 07_prompting.py (cached so heavy imports/models load once per process,
 # not on every st.rerun() triggered by buttons, chat input, mode switches, etc.)
+#
+# NOTE: this loader and everything it calls (answer_question, is_arabic) is
+# backend logic and is intentionally left untouched by this fix — only the
+# UI/CSS below was modified.
 # ---------------------------------------------------------------------------
 @st.cache_resource(show_spinner="Loading models...")
 def load_prompting_module():
@@ -120,46 +124,67 @@ html, body, [data-testid="stAppViewContainer"], .stApp,
     color:#9CA3AF; margin: 44px 0 20px 0; text-transform: uppercase;
 }
 
-/* ---- SUGGESTION CARDS ---- */
-/* Streamlit buttons are restyled to read as premium feature cards, not
-   buttons. The label is authored as three markdown paragraphs
-   (icon+title / question / arrow), which Streamlit renders as three
-   sibling <p> tags inside the button — each tier gets its own styling
-   so the card has real typographic hierarchy instead of one text block. */
-.suggest-row { margin-bottom: 8px; }
-.suggest-row div[data-testid="column"] { display: flex; }
-.suggest-row div.stButton { width: 100%; }
-.suggest-row div.stButton > button {
+/* ---- SUGGESTION CARDS ----
+   IMPORTANT: these selectors are scoped to a real Streamlit container
+   created with st.container(key="suggest_row"), which renders as an
+   actual wrapping <div class="st-key-suggest_row"> around its children
+   (columns + buttons). A plain st.markdown('<div>...</div>') does NOT
+   nest later st.columns()/st.button() calls inside it -- Streamlit
+   renders each element call into its own isolated DOM node, so those
+   end up as *siblings*, not children, and any CSS scoped to that div
+   silently matches nothing. That mismatch was the root cause of the
+   cards showing default (theme-dependent/dark) button styling with
+   clipped text. st.container(key=...) avoids that by producing a real
+   parent element. */
+.st-key-suggest_row div[data-testid="column"] {
+    display: flex !important;
+}
+.st-key-suggest_row div.stButton {
+    width: 100% !important;
+}
+.st-key-suggest_row div.stButton > button {
+    all: unset !important;
+    box-sizing: border-box !important;
+    cursor: pointer !important;
     width: 100% !important;
     height: 172px !important;
+    min-height: 172px !important;
+    max-height: 172px !important;
     display: flex !important;
     flex-direction: column !important;
     align-items: stretch !important;
     justify-content: flex-start !important;
     gap: 10px !important;
     background: #FFFFFF !important;
+    background-color: #FFFFFF !important;
     border: 1px solid #E5E7EB !important;
     border-radius: 16px !important;
     padding: 22px 22px 18px 22px !important;
     text-align: left !important;
     white-space: normal !important;
+    overflow: hidden !important;
     box-shadow: 0 1px 2px rgba(17,24,39,.04) !important;
     transition: transform .18s ease, box-shadow .18s ease, border-color .18s ease !important;
 }
-.suggest-row div.stButton > button p {
+.st-key-suggest_row div.stButton > button * {
+    box-sizing: border-box !important;
+}
+.st-key-suggest_row div.stButton > button p {
+    display: block !important;
     margin: 0 !important;
     text-align: left !important;
     white-space: normal !important;
+    overflow-wrap: break-word !important;
 }
 /* tier 1: icon + title */
-.suggest-row div.stButton > button p:nth-of-type(1) {
+.st-key-suggest_row div.stButton > button p:nth-of-type(1) {
     font-size: 15px !important;
     font-weight: 700 !important;
     color: #111827 !important;
     line-height: 1.4 !important;
 }
 /* tier 2: the question itself */
-.suggest-row div.stButton > button p:nth-of-type(2) {
+.st-key-suggest_row div.stButton > button p:nth-of-type(2) {
     font-size: 13.5px !important;
     font-weight: 400 !important;
     color: #6B7280 !important;
@@ -167,28 +192,28 @@ html, body, [data-testid="stAppViewContainer"], .stApp,
     flex: 1 1 auto;
 }
 /* tier 3: arrow, pinned to bottom-right */
-.suggest-row div.stButton > button p:nth-of-type(3) {
+.st-key-suggest_row div.stButton > button p:nth-of-type(3) {
     font-size: 16px !important;
     font-weight: 700 !important;
     color: #2563EB !important;
     align-self: flex-end !important;
     margin-top: auto !important;
 }
-.suggest-row div.stButton > button:hover {
+.st-key-suggest_row div.stButton > button:hover {
     border-color: #2563EB !important;
     box-shadow: 0 12px 28px rgba(37,99,235,.14) !important;
     transform: translateY(-3px);
 }
-.suggest-row div.stButton > button:active {
+.st-key-suggest_row div.stButton > button:active {
     transform: translateY(-1px);
 }
-.suggest-row div.stButton > button:focus-visible {
+.st-key-suggest_row div.stButton > button:focus-visible {
     outline: 2px solid #2563EB !important;
     outline-offset: 2px !important;
 }
 @media (prefers-reduced-motion: reduce) {
-    .suggest-row div.stButton > button { transition: none !important; }
-    .suggest-row div.stButton > button:hover { transform: none !important; }
+    .st-key-suggest_row div.stButton > button { transition: none !important; }
+    .st-key-suggest_row div.stButton > button:hover { transform: none !important; }
 }
 
 /* ---- CHAT BUBBLES ---- */
@@ -213,8 +238,11 @@ html, body, [data-testid="stAppViewContainer"], .stApp,
        font-family: "Segoe UI", "Cairo", Tahoma, sans-serif; }
 
 /* ---- NEW CHAT small button ---- */
-.newchat-wrap { margin: 4px 0 18px 0; }
-.newchat-wrap div.stButton > button {
+/* Same st.container(key=...) fix applied here as for the suggestion cards. */
+.st-key-newchat_wrap div.stButton > button {
+    all: unset !important;
+    box-sizing: border-box !important;
+    cursor: pointer !important;
     width: auto !important;
     height: auto !important;
     background: #FFFFFF !important;
@@ -226,7 +254,11 @@ html, body, [data-testid="stAppViewContainer"], .stApp,
     font-weight: 600 !important;
     box-shadow: 0 1px 2px rgba(17,24,39,.03) !important;
 }
-.newchat-wrap div.stButton > button:hover {
+.st-key-newchat_wrap div.stButton > button p {
+    margin: 0 !important;
+    color: inherit !important;
+}
+.st-key-newchat_wrap div.stButton > button:hover {
     background: #F9FAFB !important;
     color: #2563EB !important;
     border-color: #2563EB !important;
@@ -404,22 +436,27 @@ if not st.session_state.messages:
     )
     st.markdown('<div class="section-label">Try asking</div>', unsafe_allow_html=True)
 
-    st.markdown('<div class="suggest-row">', unsafe_allow_html=True)
-    s_cols = st.columns(3)
-    for idx, (icon, title, question) in enumerate(SUGGESTIONS):
-        with s_cols[idx % 3]:
-            label = f"{icon}  {title}\n\n{question}\n\n→"
-            if st.button(label, key=f"sugg_{idx}"):
-                st.session_state.pending_question = question
-                st.rerun()
-    st.markdown('</div>', unsafe_allow_html=True)
+    # st.container(key=...) creates a REAL wrapping DOM element (rendered as
+    # <div class="st-key-suggest_row">) that actually contains the columns
+    # and buttons created inside it. This is what makes the CSS above able
+    # to find and style these specific buttons. (A previous version used
+    # st.markdown('<div class="suggest-row">...</div>') around this block,
+    # which does NOT nest later widgets inside it -- that mismatch is why
+    # the cards were unstyled/black with clipped text.)
+    with st.container(key="suggest_row"):
+        s_cols = st.columns(3)
+        for idx, (icon, title, question) in enumerate(SUGGESTIONS):
+            with s_cols[idx % 3]:
+                label = f"{icon}  {title}\n\n{question}\n\n→"
+                if st.button(label, key=f"sugg_{idx}", use_container_width=True):
+                    st.session_state.pending_question = question
+                    st.rerun()
 else:
     # New-chat button
-    st.markdown('<div class="newchat-wrap">', unsafe_allow_html=True)
-    if st.button("＋ New chat", key="new_chat"):
-        st.session_state.messages = []
-        st.rerun()
-    st.markdown("</div>", unsafe_allow_html=True)
+    with st.container(key="newchat_wrap"):
+        if st.button("＋ New chat", key="new_chat"):
+            st.session_state.messages = []
+            st.rerun()
 
     for msg in st.session_state.messages:
         render_message(msg)
