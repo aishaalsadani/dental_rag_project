@@ -307,18 +307,11 @@ MODE_DESCRIPTIONS = {
 col_brand, col_pills = st.columns([1.4, 1], vertical_alignment="center")
 
 with col_brand:
-    st.markdown(
-        """
-        <div class="brand">
-            <div class="brand-logo">🦷</div>
-            <div>
-                <div class="brand-title">DentAI</div>
-                <div class="brand-sub">Smart Dental Patient Assistant</div>
-            </div>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
+st.markdown(
+    '<div class="footer-note">DentAI provides general information from your clinic\'s '
+    "documents and is not a substitute for professional dental advice.</div>",
+    unsafe_allow_html=True,
+)
 
 with col_pills:
     p_cols = st.columns(len(MODE_LABELS))
