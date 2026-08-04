@@ -39,12 +39,17 @@ NOT_FOUND_AR = ("الإجابة: المعلومة دي مش موجودة في ا
 # Prompts (STRICT — grounded only)
 # ---------------------------------------------------------------------------
 WEAK_PROMPT = """Answer the question using ONLY the context. If the answer is not in the context, say you don't know.
+
+{language_directive}
+
 Context: {context}
 Question: {question}"""
 
 BETTER_PROMPT = """You are a dental patient-education assistant. Answer the patient's question using
 ONLY information that is explicitly stated in the context below. Cite the source number(s) for each
 claim, like [1]. If the context does not contain the answer, reply exactly: "NOT_IN_CONTEXT".
+
+{language_directive}
 
 Context:
 {context}
@@ -74,44 +79,103 @@ Source freshness:
 - Sources are labeled CURRENT or OUTDATED. Prefer CURRENT. If two CURRENT sources conflict, prefer the
   most recent and mention the conflict briefly.
 
-Language rule (VERY IMPORTANT):
-- Detect the language AND dialect of the patient's question and reply in the SAME language/dialect.
-- If the question uses Egyptian colloquial Arabic (words like "ازاي", "عايز", "بتاع", "مش", "ايه", "ليه", "فين"),
-  reply ENTIRELY in natural Egyptian Arabic (العامية المصرية) — friendly and warm. Do NOT use فصحى in that case.
-- If the question is in Modern Standard Arabic, reply in فصحى.
-- If in English, reply in English.
-- Start with the label naturally:
-    * English  -> "ANSWER:"
-    * فصحى     -> "الإجابة:"
-    * مصري     -> "الإجابة:"
-
 Output format:
 ANSWER: <your answer, grounded ONLY in the context, with inline citations like [1], [2]>
 (do NOT add a separate "SOURCES USED" line at the end; the inline citations are enough.)
 
-Context package:
+Context package (the sources below may be written in a different language than the patient's
+question — that is normal and does NOT change what language you reply in):
 {context}
 
 Patient question: {question}
+
+{language_directive}
+
 Reply now:"""
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
-def build_prompt(question, context_text, style="strict"):
-    template = {"weak": WEAK_PROMPT, "better": BETTER_PROMPT, "strict": STRICT_PROMPT}[style]
-    return template.format(context=context_text, question=question)
-
-
 _ARABIC_RE = re.compile(r"[؀-ۿ]")
+_LATIN_RE = re.compile(r"[A-Za-z]")
+
+# A handful of high-signal Egyptian colloquial markers. Not exhaustive by
+# design — this only needs to catch the common case so we can pick the right
+# opening label / register; the model still writes the actual reply.
+_EGYPTIAN_MARKERS = (
+    "ازاي", "عايز", "عاوز", "بتاع", "بتاعت", "مش", "ايه", "إيه", "ليه",
+    "فين", "كده", "كدا", "دلوقتي", "خالص", "علشان", "عشان", "هو ده",
+    "مفيش", "حاجة", "اهو", "يلا", "بقى",
+)
 
 
 def is_arabic(text):
+    """True if the text contains any Arabic-script characters at all.
+    Used for lightweight UI decisions (e.g. RTL bubble alignment)."""
     return bool(_ARABIC_RE.search(text or ""))
 
 
+def _dominant_script(text):
+    """Decide which script dominates a piece of text, for mixed-language
+    input. Returns 'ar' or 'en'. Arabic wins ties (e.g. a mostly-Arabic
+    sentence with one English brand name should still get an Arabic reply)."""
+    text = text or ""
+    arabic_count = len(_ARABIC_RE.findall(text))
+    latin_count = len(_LATIN_RE.findall(text))
+    if arabic_count == 0:
+        return "en"
+    if latin_count == 0:
+        return "ar"
+    return "ar" if arabic_count >= latin_count else "en"
+
+
+def _is_egyptian_colloquial(text):
+    text = text or ""
+    return any(marker in text for marker in _EGYPTIAN_MARKERS)
+
+
+def _language_directive(question):
+    """Build an explicit, non-negotiable instruction that pins the reply
+    language in code (based on the actual question), instead of leaving
+    language detection up to the model. This is deliberately placed right
+    before "Reply now:" in the prompt template — the position closest to
+    generation, which models weight most heavily — so it isn't overridden
+    by the language of the (often Arabic) retrieved context sitting just
+    above it.
+    """
+    script = _dominant_script(question)
+    if script == "ar":
+        if _is_egyptian_colloquial(question):
+            return (
+                "LANGUAGE INSTRUCTION (must follow exactly): The patient wrote in Egyptian "
+                "colloquial Arabic. Reply ENTIRELY in Egyptian colloquial Arabic (العامية "
+                "المصرية) — warm and natural, not فصحى. Do NOT reply in English, even if the "
+                "context above is in English. Begin your reply with \"الإجابة:\"."
+            )
+        return (
+            "LANGUAGE INSTRUCTION (must follow exactly): The patient wrote in Modern Standard "
+            "Arabic. Reply ENTIRELY in Modern Standard Arabic (الفصحى). Do NOT reply in "
+            "English, even if the context above is in English. Begin your reply with "
+            "\"الإجابة:\"."
+        )
+    return (
+        "LANGUAGE INSTRUCTION (must follow exactly): The patient wrote in English. Reply "
+        "ENTIRELY in English. Do NOT reply in Arabic, even if the context above is in Arabic. "
+        "Begin your reply with \"ANSWER:\"."
+    )
+
+
+def build_prompt(question, context_text, style="strict"):
+    template = {"weak": WEAK_PROMPT, "better": BETTER_PROMPT, "strict": STRICT_PROMPT}[style]
+    return template.format(
+        context=context_text,
+        question=question,
+        language_directive=_language_directive(question),
+    )
+
+
 def _not_found_message(question):
-    return NOT_FOUND_AR if is_arabic(question) else NOT_FOUND_EN
+    return NOT_FOUND_AR if _dominant_script(question) == "ar" else NOT_FOUND_EN
 
 
 # Detects the model's own "I don't know / not in context" signal.
@@ -149,7 +213,7 @@ def _extractive_fallback(evidence, question=""):
     """Used only when no API key is configured but we DO have evidence."""
     if not evidence:
         return _not_found_message(question)
-    if is_arabic(question):
+    if _dominant_script(question) == "ar":
         lines = ["الإجابة: [مفيش OPENROUTER_API_KEY -- ده رد مبني على المصادر مباشرة]"]
         for i, e in enumerate(evidence, start=1):
             snippet = " ".join(e["text"].split()[:40])
