@@ -73,106 +73,129 @@ html, body, [data-testid="stAppViewContainer"], .stApp,
 [data-testid="stChatInputContainer"], .main, section.main {
     background: #F7F9FC !important;
     background-color: #F7F9FC !important;
-    color: #1E293B !important;
+    color: #111827 !important;
     font-family: "Inter", "Segoe UI", -apple-system, BlinkMacSystemFont, sans-serif;
 }
 .stApp { margin-top: 0 !important; }
 .block-container {
     padding-top: 2rem !important;
     padding-bottom: 9rem !important;
-    max-width: 980px !important;
+    max-width: 900px !important;
 }
 
-/* ---- TOP BAR (brand + mode pills) ---- */
-.brand { display: flex; align-items: center; gap: 14px; padding: 6px 4px 18px 4px; }
+/* ---- BRAND ---- */
+.brand { display: flex; align-items: center; gap: 14px; padding: 6px 4px 8px 4px; }
 .brand-logo {
     width: 46px; height: 46px; border-radius: 12px;
     background: linear-gradient(135deg, #2563EB, #60A5FA);
     display: flex; align-items: center; justify-content: center;
     color: white; font-size: 22px;
-    box-shadow: 0 4px 14px rgba(37, 99, 235, 0.25);
+    box-shadow: 0 4px 14px rgba(37, 99, 235, 0.22);
 }
-.brand-title { font-size: 21px; font-weight: 700; color:#0F172A; line-height:1.15; letter-spacing: -0.01em; }
-.brand-sub   { font-size: 13px; color:#64748B; font-weight: 500; }
+.brand-title { font-size: 21px; font-weight: 700; color:#111827; line-height:1.15; letter-spacing: -0.01em; }
+.brand-sub   { font-size: 13px; color:#6B7280; font-weight: 500; }
 
 /* ---- HERO ---- */
-.hero { text-align:center; margin: 36px 0 22px 0; }
+.hero { text-align:center; margin: 48px 0 8px 0; }
 .hero h1 {
-    font-size: 34px; font-weight: 800; color:#0F172A;
+    font-size: 34px; font-weight: 800; color:#111827;
     margin-bottom: 14px; letter-spacing: -0.02em;
 }
-.hero p  { font-size: 16px; color:#64748B; margin: 4px auto; line-height: 1.7; max-width: 520px; }
+.hero p  { font-size: 16px; color:#6B7280; margin: 4px auto; line-height: 1.7; max-width: 480px; }
 
 .verified-badge {
     display: inline-flex; align-items: center; gap: 6px;
-    background: #EFF6FF; color: #2563EB; border: 1px solid #BFDBFE;
+    background: #EFF6FF; color: #2563EB; border: 1px solid #DBEAFE;
     border-radius: 999px; padding: 7px 16px; font-size: 13px; font-weight: 600;
-    margin-top: 18px;
+    margin-top: 20px;
 }
 
 .lang-badge {
-    text-align:center; color:#94A3B8; font-size: 13px; margin-top: 12px; font-weight: 500;
+    text-align:center; color:#9CA3AF; font-size: 13px; margin-top: 14px; font-weight: 500;
 }
 
-/* ---- MODE PILLS ---- */
-div.stButton > button {
-    transition: all .15s ease;
-}
-.mode-row div.stButton > button {
-    width:100%; background:#FFFFFF !important; color:#475569 !important;
-    border:1px solid #E6EBF3 !important; border-radius:12px !important;
-    padding: 10px 14px !important; font-size:14px !important; font-weight:600 !important;
-    box-shadow: 0 1px 2px rgba(15,23,42,.03) !important;
-}
-.mode-row div.stButton > button:hover {
-    border-color:#93C5FD !important; color:#2563EB !important;
-    background:#F8FAFC !important;
-}
-.mode-row div.stButton > button[kind="primary"] {
-    background:#2563EB !important; color:#FFFFFF !important;
-    border:1px solid #2563EB !important; font-weight:700 !important;
-    box-shadow: 0 4px 12px rgba(37,99,235,.25) !important;
-}
-
-/* ---- MODE DESCRIPTION CARD ---- */
-.mode-desc {
-    text-align: center;
-    background: #FFFFFF;
-    border: 1px solid #E6EBF3;
-    border-radius: 14px;
-    padding: 16px 22px;
-    margin: 18px auto 8px auto;
-    max-width: 620px;
-    color: #475569;
-    font-size: 14px;
-    line-height: 1.6;
-    box-shadow: 0 2px 10px rgba(15,23,42,.04);
-}
-.mode-desc b { color: #0F172A; font-weight: 700; }
-
-/* ---- SUGGESTIONS ---- */
+/* ---- SUGGESTIONS SECTION LABEL ---- */
 .section-label {
     text-align:center; font-size:12px; font-weight:700; letter-spacing:1.8px;
-    color:#94A3B8; margin: 34px 0 16px 0; text-transform: uppercase;
+    color:#9CA3AF; margin: 44px 0 20px 0; text-transform: uppercase;
 }
+
+/* ---- SUGGESTION CARDS ---- */
+/* Streamlit buttons are restyled to read as premium feature cards, not
+   buttons. The label is authored as three markdown paragraphs
+   (icon+title / question / arrow), which Streamlit renders as three
+   sibling <p> tags inside the button — each tier gets its own styling
+   so the card has real typographic hierarchy instead of one text block. */
+.suggest-row { margin-bottom: 8px; }
+.suggest-row div[data-testid="column"] { display: flex; }
+.suggest-row div.stButton { width: 100%; }
 .suggest-row div.stButton > button {
-    width:100%; background:#FFFFFF !important; color:#334155 !important;
-    border:1px solid #E6EBF3 !important; border-radius:16px !important;
-    padding: 18px 20px !important; font-size:14px !important; font-weight:500 !important;
-    text-align:left !important; box-shadow: 0 1px 3px rgba(15,23,42,.04) !important;
-    transition: all .15s ease; height: auto !important; min-height: 84px;
-    white-space: normal !important; line-height: 1.5 !important;
+    width: 100% !important;
+    height: 172px !important;
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: stretch !important;
+    justify-content: flex-start !important;
+    gap: 10px !important;
+    background: #FFFFFF !important;
+    border: 1px solid #E5E7EB !important;
+    border-radius: 16px !important;
+    padding: 22px 22px 18px 22px !important;
+    text-align: left !important;
+    white-space: normal !important;
+    box-shadow: 0 1px 2px rgba(17,24,39,.04) !important;
+    transition: transform .18s ease, box-shadow .18s ease, border-color .18s ease !important;
+}
+.suggest-row div.stButton > button p {
+    margin: 0 !important;
+    text-align: left !important;
+    white-space: normal !important;
+}
+/* tier 1: icon + title */
+.suggest-row div.stButton > button p:nth-of-type(1) {
+    font-size: 15px !important;
+    font-weight: 700 !important;
+    color: #111827 !important;
+    line-height: 1.4 !important;
+}
+/* tier 2: the question itself */
+.suggest-row div.stButton > button p:nth-of-type(2) {
+    font-size: 13.5px !important;
+    font-weight: 400 !important;
+    color: #6B7280 !important;
+    line-height: 1.6 !important;
+    flex: 1 1 auto;
+}
+/* tier 3: arrow, pinned to bottom-right */
+.suggest-row div.stButton > button p:nth-of-type(3) {
+    font-size: 16px !important;
+    font-weight: 700 !important;
+    color: #2563EB !important;
+    align-self: flex-end !important;
+    margin-top: auto !important;
 }
 .suggest-row div.stButton > button:hover {
-    border-color:#93C5FD !important; box-shadow: 0 6px 18px rgba(37,99,235,.12) !important;
-    transform: translateY(-2px);
+    border-color: #2563EB !important;
+    box-shadow: 0 12px 28px rgba(37,99,235,.14) !important;
+    transform: translateY(-3px);
+}
+.suggest-row div.stButton > button:active {
+    transform: translateY(-1px);
+}
+.suggest-row div.stButton > button:focus-visible {
+    outline: 2px solid #2563EB !important;
+    outline-offset: 2px !important;
+}
+@media (prefers-reduced-motion: reduce) {
+    .suggest-row div.stButton > button { transition: none !important; }
+    .suggest-row div.stButton > button:hover { transform: none !important; }
 }
 
 /* ---- CHAT BUBBLES ---- */
 .msg-user, .msg-bot {
     padding: 15px 19px; border-radius: 16px; margin: 10px 0;
     max-width: 75%; line-height: 1.7; font-size: 15px;
-    box-shadow: 0 1px 3px rgba(15,23,42,.05);
+    box-shadow: 0 1px 3px rgba(17,24,39,.05);
     word-wrap: break-word;
 }
 .msg-user {
@@ -181,11 +204,11 @@ div.stButton > button {
 }
 .msg-user * { color: #fff !important; }
 .msg-bot {
-    background:#FFFFFF; color:#0F172A !important;
-    border:1px solid #E6EBF3; margin-right:auto;
+    background:#FFFFFF; color:#111827 !important;
+    border:1px solid #E5E7EB; margin-right:auto;
     border-bottom-left-radius: 4px;
 }
-.msg-bot * { color:#0F172A !important; }
+.msg-bot * { color:#111827 !important; }
 .rtl { direction: rtl; text-align: right;
        font-family: "Segoe UI", "Cairo", Tahoma, sans-serif; }
 
@@ -193,27 +216,28 @@ div.stButton > button {
 .newchat-wrap { margin: 4px 0 18px 0; }
 .newchat-wrap div.stButton > button {
     width: auto !important;
+    height: auto !important;
     background: #FFFFFF !important;
-    color: #64748B !important;
-    border: 1px solid #E6EBF3 !important;
+    color: #6B7280 !important;
+    border: 1px solid #E5E7EB !important;
     border-radius: 10px !important;
     padding: 7px 16px !important;
     font-size: 13px !important;
     font-weight: 600 !important;
-    box-shadow: 0 1px 2px rgba(15,23,42,.03) !important;
+    box-shadow: 0 1px 2px rgba(17,24,39,.03) !important;
 }
 .newchat-wrap div.stButton > button:hover {
-    background: #F8FAFC !important;
+    background: #F9FAFB !important;
     color: #2563EB !important;
-    border-color: #93C5FD !important;
+    border-color: #2563EB !important;
+    transform: none !important;
 }
 
-/* ---- FOOTER NOTE ---- */
+/* ---- FOOTER ---- */
 .footer-note {
-    text-align:center; color:#94A3B8; font-size:12.5px; margin-top: 30px;
-    line-height: 1.6;
+    text-align:center; color:#9CA3AF; font-size:12.5px;
+    margin-top: 36px; letter-spacing: 0.01em;
 }
-.footer-note b { color: #64748B; }
 
 /* ---- CHAT INPUT BAR ---- */
 [data-testid="stBottom"],
@@ -230,13 +254,13 @@ div[data-baseweb="base-input"] {
     background-color: #F7F9FC !important;
 }
 [data-testid="stBottom"], [data-testid="stBottomBlockContainer"] {
-    border-top: 1px solid #E6EBF3 !important;
+    border-top: 1px solid #E5E7EB !important;
 }
 [data-testid="stChatInput"] {
     background: #FFFFFF !important;
-    border: 1.5px solid #E2E8F0 !important;
+    border: 1.5px solid #E5E7EB !important;
     border-radius: 18px !important;
-    box-shadow: 0 4px 16px rgba(15,23,42,.06) !important;
+    box-shadow: 0 4px 16px rgba(17,24,39,.06) !important;
     max-width: 900px !important;
     margin: 0 auto !important;
 }
@@ -247,14 +271,14 @@ div[data-baseweb="base-input"] {
 [data-testid="stChatInput"] textarea,
 [data-testid="stChatInput"] input {
     background: #FFFFFF !important;
-    color: #0F172A !important;
+    color: #111827 !important;
     border: none !important;
     caret-color: #2563EB !important;
     font-size: 15px !important;
 }
 [data-testid="stChatInput"] textarea::placeholder,
 [data-testid="stChatInput"] input::placeholder {
-    color: #94A3B8 !important;
+    color: #9CA3AF !important;
 }
 [data-testid="stChatInput"] button {
     background: #2563EB !important;
@@ -269,7 +293,7 @@ div[data-baseweb="base-input"] {
     color: #fff !important;
 }
 
-/* Kill any dark leftovers */
+/* Kill any dark/black leftovers */
 div[style*="background-color: rgb(14, 17, 23)"],
 div[style*="background: rgb(14, 17, 23)"],
 div[style*="background-color: rgb(38, 39, 48)"],
@@ -285,61 +309,14 @@ div[style*="background-color: black"] {
 # Session state
 # ---------------------------------------------------------------------------
 if "mode" not in st.session_state:
+    # Mode selection is no longer exposed in the UI (patients found it
+    # confusing). We keep a single fixed internal quality tier — "strict" —
+    # which maps to the most carefully-checked answers. answer_question()
+    # still receives style=... exactly as before, so backend behavior for
+    # this tier is unchanged.
     st.session_state.mode = "strict"
 if "messages" not in st.session_state:
     st.session_state.messages = []
-
-def set_mode(m):
-    st.session_state.mode = m
-
-# NOTE: internal keys ("strict" / "better" / "weak") are unchanged so backend
-# logic (answer_question(style=...)) keeps working exactly as before. Only
-# the labels/icons/descriptions shown to the user have been renamed.
-MODE_LABELS = {
-    "strict": ("🛡", "Verified"),
-    "better": ("📋", "Balanced"),
-    "weak":   ("⚡", "Fast"),
-}
-
-MODE_DESCRIPTIONS = {
-    "strict": "🛡 <b>Verified:</b> Responses generated only from your clinic's verified clinical knowledge.",
-    "better": "📋 <b>Balanced:</b> Reliable answers with clear patient-friendly explanations.",
-    "weak":   "⚡ <b>Fast:</b> Quick responses for common dental questions.",
-}
-
-# ---------------------------------------------------------------------------
-# Top bar (brand + mode pills)
-# ---------------------------------------------------------------------------
-col_brand, col_pills = st.columns([1.3, 1], vertical_alignment="center")
-
-with col_brand:
-    st.markdown(
-        """
-        <div class="brand">
-            <div class="brand-logo">🦷</div>
-            <div>
-                <div class="brand-title">DentAI</div>
-                <div class="brand-sub">AI Dental Assistant</div>
-            </div>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
-
-with col_pills:
-    st.markdown('<div class="mode-row">', unsafe_allow_html=True)
-    p_cols = st.columns(len(MODE_LABELS))
-    for col, (mode_key, (emoji, label)) in zip(p_cols, MODE_LABELS.items()):
-        with col:
-            st.button(
-                f"{emoji} {label}",
-                key=f"pill_{mode_key}",
-                type="primary" if st.session_state.mode == mode_key else "secondary",
-                on_click=set_mode,
-                args=(mode_key,),
-                use_container_width=True,
-            )
-    st.markdown('</div>', unsafe_allow_html=True)
 
 # ---------------------------------------------------------------------------
 # Helper: render a single chat message
@@ -381,17 +358,35 @@ if st.session_state.get("pending_question"):
     handle_question(st.session_state.pop("pending_question"))
 
 # ---------------------------------------------------------------------------
+# Top bar (brand only — mode switcher removed)
+# ---------------------------------------------------------------------------
+st.markdown(
+    """
+    <div class="brand">
+        <div class="brand-logo">🦷</div>
+        <div>
+            <div class="brand-title">DentAI</div>
+            <div class="brand-sub">AI Dental Assistant</div>
+        </div>
+    </div>
+    """,
+    unsafe_allow_html=True,
+)
+
+# ---------------------------------------------------------------------------
 # Body: hero + suggestions (empty state)  OR  conversation
 # ---------------------------------------------------------------------------
+# A tight, mirrored set of six topics (three in English, the same three in
+# Arabic) so the grid is always a perfect 3x2 — no half-empty last row, no
+# language mixed mid-row. Fewer, symmetric cards read as more premium than
+# a full but uneven set.
 SUGGESTIONS = [
     ("🦷", "Tooth Extraction", "What should I do after a tooth extraction?"),
-    ("👑", "Crowns", "How should I care for my new dental crown?"),
-    ("🪥", "Braces", "How do I clean my teeth with braces?"),
-    ("🩺", "Root Canal", "Can I eat normally after a root canal treatment?"),
-    ("🦷", "خلع الضرس", "ما التعليمات بعد خلع الضرس؟"),
-    ("🪥", "التقويم", "ازاي أنضف أسناني وأنا لابس تقويم؟"),
+    ("👑", "Crowns & Bridges", "How should I care for my new dental crown?"),
+    ("😁", "Teeth Whitening", "Is professional teeth whitening safe?"),
+    ("🦷", "خلع الأسنان", "ما التعليمات بعد خلع الضرس؟"),
+    ("👑", "التركيبات", "كيف أعتني بالتركيبة الجديدة؟"),
     ("😁", "تبييض الأسنان", "هل تبييض الأسنان آمن؟"),
-    ("🩺", "حشو العصب", "امتى أقدر آكل بعد حشو العصب؟"),
 ]
 
 if not st.session_state.messages:
@@ -407,17 +402,14 @@ if not st.session_state.messages:
         """,
         unsafe_allow_html=True,
     )
-    st.markdown(
-        f'<div class="mode-desc">{MODE_DESCRIPTIONS[st.session_state.mode]}</div>',
-        unsafe_allow_html=True,
-    )
     st.markdown('<div class="section-label">Try asking</div>', unsafe_allow_html=True)
 
     st.markdown('<div class="suggest-row">', unsafe_allow_html=True)
-    s_cols = st.columns(2)
+    s_cols = st.columns(3)
     for idx, (icon, title, question) in enumerate(SUGGESTIONS):
-        with s_cols[idx % 2]:
-            if st.button(f"{icon}  **{title}**\n\n{question}", key=f"sugg_{idx}"):
+        with s_cols[idx % 3]:
+            label = f"{icon}  {title}\n\n{question}\n\n→"
+            if st.button(label, key=f"sugg_{idx}"):
                 st.session_state.pending_question = question
                 st.rerun()
     st.markdown('</div>', unsafe_allow_html=True)
@@ -433,7 +425,7 @@ else:
         render_message(msg)
 
 st.markdown(
-    '<div class="footer-note"><b>Powered by DentAI</b><br>AI for Smarter Dental Care</div>',
+    '<div class="footer-note">Powered by DentAI • AI for Smarter Dental Care</div>',
     unsafe_allow_html=True,
 )
 
