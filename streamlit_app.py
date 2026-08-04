@@ -345,18 +345,17 @@ def render_message(msg):
     safe = content.replace("\n", "<br>")
     st.markdown(f'<div class="{bubble}{rtl}">{safe}</div>', unsafe_allow_html=True)
 
-    # Sources expander (assistant only)
-    if role == "assistant" and msg.get("sources"):
-        with st.expander(f"📚 Sources ({len(msg['sources'])})"):
-            for i, s in enumerate(msg["sources"], start=1):
-                status = "CURRENT" if s.get("is_current") else "OUTDATED"
-                st.markdown(
-                    f"**[{i}] {s.get('title', 'Source')}** "
-                    f"({status}, updated {s.get('effective_date', '—')})"
-                )
-                st.markdown(s.get("text", ""))
-                if i < len(msg["sources"]):
-                    st.markdown("---")
+def render_message(msg):
+    role = msg["role"]
+    content = msg["content"]
+    rtl = " rtl" if is_arabic(content) else ""
+    bubble = "msg-user" if role == "user" else "msg-bot"
+
+    safe = content.replace("\n", "<br>")
+    st.markdown(
+        f'<div class="{bubble}{rtl}">{safe}</div>',
+        unsafe_allow_html=True
+    )
 
 
 # ---------------------------------------------------------------------------
