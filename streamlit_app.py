@@ -302,5 +302,139 @@ MODE_DESCRIPTIONS = {
 }
 
 # ---------------------------------------------------------------------------
-# Top bar
+# Top bar (brand + mode pills)
 # ---------------------------------------------------------------------------
+col_brand, col_pills = st.columns([1.4, 1], vertical_alignment="center")
+
+with col_brand:
+    st.markdown(
+        """
+        <div class="brand">
+            <div class="brand-logo">🦷</div>
+            <div>
+                <div class="brand-title">DentAI</div>
+                <div class="brand-sub">Smart Dental Patient Assistant</div>
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+with col_pills:
+    p_cols = st.columns(len(MODE_LABELS))
+    for col, (mode_key, (emoji, label)) in zip(p_cols, MODE_LABELS.items()):
+        with col:
+            st.button(
+                f"{emoji} {label}",
+                key=f"pill_{mode_key}",
+                type="primary" if st.session_state.mode == mode_key else "secondary",
+                on_click=set_mode,
+                args=(mode_key,),
+                use_container_width=True,
+            )
+
+# ---------------------------------------------------------------------------
+# Helper: render a single chat message
+# ---------------------------------------------------------------------------
+def render_message(msg):
+    role = msg["role"]
+    content = msg["content"]
+    rtl = " rtl" if is_arabic(content) else ""
+    bubble = "msg-user" if role == "user" else "msg-bot"
+    # content is plain text; preserve line breaks for display.
+    safe = content.replace("\n", "<br>")
+    st.markdown(f'<div class="{bubble}{rtl}">{safe}</div>', unsafe_allow_html=True)
+
+    # Sources expander (assistant only)
+    if role == "assistant" and msg.get("sources"):
+        with st.expander(f"📚 Sources ({len(msg['sources'])})"):
+            for i, s in enumerate(msg["sources"], start=1):
+                status = "CURRENT" if s.get("is_current") else "OUTDATED"
+                st.markdown(
+                    f"**[{i}] {s.get('title', 'Source')}** "
+                    f"({status}, updated {s.get('effective_date', '—')})"
+                )
+                st.markdown(s.get("text", ""))
+                if i < len(msg["sources"]):
+                    st.markdown("---")
+
+
+# ---------------------------------------------------------------------------
+# Handle a new question (from chat input or a suggestion click)
+# ---------------------------------------------------------------------------
+def handle_question(question):
+    question = (question or "").strip()
+    if not question:
+        return
+    st.session_state.messages.append({"role": "user", "content": question})
+    try:
+        answer, sources = answer_question(question, style=st.session_state.mode)
+    except Exception as exc:  # never let a runtime error blank the whole app
+        answer, sources = f"⚠️ Something went wrong while answering: {exc}", []
+    st.session_state.messages.append(
+        {"role": "assistant", "content": answer, "sources": sources}
+    )
+
+
+# A suggestion/chat submission stores its text here; we process it on rerun.
+if st.session_state.get("pending_question"):
+    handle_question(st.session_state.pop("pending_question"))
+
+# ---------------------------------------------------------------------------
+# Body: hero + suggestions (empty state)  OR  conversation
+# ---------------------------------------------------------------------------
+SUGGESTIONS = [
+    "Is teeth whitening safe?",
+    "How do I take care of my new crown or bridge?",
+    "ازاي أعتني بأسناني بعد تركيب التقويم؟",
+    "ايه اللي لازم أعمله بعد خلع الضرس؟",
+]
+
+if not st.session_state.messages:
+    st.markdown(
+        """
+        <div class="hero">
+            <h1>How can I help with your dental care?</h1>
+            <p>Ask me anything about your treatment, aftercare, or oral health.
+            Answers come only from your clinic's trusted dental documents.</p>
+            <div class="lang">🌐 English · العربية · العامية المصرية</div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+    st.markdown(
+        f'<div class="mode-desc">{MODE_DESCRIPTIONS[st.session_state.mode]}</div>',
+        unsafe_allow_html=True,
+    )
+    st.markdown('<div class="section-label">TRY ASKING</div>', unsafe_allow_html=True)
+
+    s_cols = st.columns(2)
+    for idx, suggestion in enumerate(SUGGESTIONS):
+        with s_cols[idx % 2]:
+            if st.button(suggestion, key=f"sugg_{idx}"):
+                st.session_state.pending_question = suggestion
+                st.rerun()
+else:
+    # New-chat button
+    st.markdown('<div class="newchat-wrap">', unsafe_allow_html=True)
+    if st.button("＋ New chat", key="new_chat"):
+        st.session_state.messages = []
+        st.rerun()
+    st.markdown("</div>", unsafe_allow_html=True)
+
+    for msg in st.session_state.messages:
+        render_message(msg)
+
+st.markdown(
+    '<div class="footer-note">DentAI provides general information from your clinic\'s '
+    "documents and is not a substitute for professional dental advice.</div>",
+    unsafe_allow_html=True,
+)
+
+# ---------------------------------------------------------------------------
+# Chat input (always pinned at the bottom)
+# ---------------------------------------------------------------------------
+user_input = st.chat_input("Ask about your dental care…")
+if user_input:
+    st.session_state.pending_question = user_input
+    st.rerun()
