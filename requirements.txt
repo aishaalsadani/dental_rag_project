@@ -7,3 +7,5 @@ rank-bm25
 scikit-learn
 sentence-transformers
 streamlit
+torch
+torchvision
