@@ -61,11 +61,19 @@ try:
     st_model = SentenceTransformer(MODEL_NAME)
     embeddings = st_model.encode(corpus, show_progress_bar=False)
     SEMANTIC_MODE = "sentence-transformers"
-except Exception:
+    # Visible in the Streamlit Cloud logs so we can confirm the multilingual
+    # model actually loaded (this is what makes Arabic->English matching work).
+    print(f"[04_vector_representation] SEMANTIC_MODE = sentence-transformers ({MODEL_NAME})")
+except Exception as _semantic_exc:
     from sklearn.decomposition import TruncatedSVD
     svd_model = TruncatedSVD(n_components=64, random_state=42)
     embeddings = svd_model.fit_transform(tfidf_matrix)
     SEMANTIC_MODE = "lsa_fallback"
+    # If we land here, the multilingual model did NOT load and retrieval fell
+    # back to the weak English-only LSA path — this is the usual reason Arabic
+    # questions fail. The exact reason is printed for the logs.
+    print(f"[04_vector_representation] SEMANTIC_MODE = lsa_fallback -- "
+          f"sentence-transformers unavailable: {_semantic_exc!r}")
 
 def embed_query(query):
     if SEMANTIC_MODE == "sentence-transformers":
