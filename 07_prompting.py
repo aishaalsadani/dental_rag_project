@@ -290,32 +290,40 @@ def _translate_query_to_english(text):
 
 
 def _retrieve_evidence(question):
-    """Retrieve context, with a cross-language fallback for Arabic queries.
+    """Retrieve context, with a cross-language strategy for Arabic queries.
 
-    The knowledge base appears to be indexed primarily in English, so a
-    literal Arabic query can fail to match semantically-identical English
-    content even though the answer is present. We always try retrieval
-    with the question exactly as written first — this preserves existing
-    behavior for English questions and for any Arabic content that *is*
-    indexed natively, so nothing that already worked can regress. Only if
-    that first attempt returns nothing AND the question is Arabic do we
-    fall back to retrieving with an internal English translation of the
-    query. The translation is used for retrieval only; grounding and the
-    final answer still use the original Arabic question and the retrieved
-    (possibly English-language) source text.
+    The knowledge base is indexed primarily in English. A literal Arabic query
+    can either match nothing OR — worse — match a few irrelevant chunks, which
+    then makes the LLM answer NOT_IN_CONTEXT even though the answer is present
+    in an English document. English questions already retrieve correctly.
+
+    Strategy:
+      - English question -> retrieve with the question exactly as written
+        (unchanged behaviour, so nothing English can regress).
+      - Arabic question  -> translate to English FIRST and use that as the
+        PRIMARY retrieval key (this is what actually matches the English KB).
+        Only if the translated retrieval finds nothing do we fall back to the
+        raw Arabic query, so any natively-indexed Arabic content still works.
+
+    The translation is used for RETRIEVAL ONLY. Grounding and the final answer
+    still use the original question and the retrieved source text, and the
+    reply language is pinned to the original question's language elsewhere.
     """
-    evidence = build_context(question)
-    if evidence:
-        return evidence
+    # Non-Arabic: keep the exact original behaviour.
+    if _dominant_script(question) != "ar":
+        return build_context(question)
 
-    if _dominant_script(question) == "ar":
-        translated_query = _translate_query_to_english(question)
-        if DEBUG:
-            print(f"[DEBUG] Arabic retrieval empty, retrying with translated query: {translated_query!r}")
-        if translated_query and translated_query.strip().lower() != question.strip().lower():
-            evidence = build_context(translated_query)
+    # Arabic: translate first, retrieve with English as the primary key.
+    translated_query = _translate_query_to_english(question)
+    if DEBUG:
+        print(f"[DEBUG] Arabic query translated for retrieval: {translated_query!r}")
+    if translated_query and translated_query.strip().lower() != question.strip().lower():
+        evidence = build_context(translated_query)
+        if evidence:
+            return evidence
 
-    return evidence
+    # Fallback: try the original Arabic query directly.
+    return build_context(question)
 
 
 # ---------------------------------------------------------------------------
