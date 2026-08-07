@@ -1,20 +1,7 @@
+--extra-index-url https://download.pytorch.org/whl/cpu
+
 chromadb
 numpy<2
-openai
-pandas
-python-dotenv
-rank-bm25
-scikit-learn
-sentence-transformers==3.0.1
-transformers==4.44.2
-torch==2.4.1
-streamlit
-
-# DentAI — pinned, mutually-compatible stack.
-# IMPORTANT: deploy this on Python 3.12 (Streamlit Advanced settings).
-# These torch/torchvision wheels are stable on 3.12; they do NOT exist for 3.14.
-
-numpy<2
 pandas
 scikit-learn
 rank-bm25
@@ -22,10 +9,7 @@ openai
 python-dotenv
 streamlit
 
-# --- ML stack (versions that work together and DON'T pull a missing torchvision) ---
-torch==2.3.1
-torchvision==0.18.1
+torch==2.3.1+cpu
 transformers==4.41.2
 sentence-transformers==3.0.1
 huggingface-hub==0.23.4
-
