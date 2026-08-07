@@ -1,5 +1,3 @@
---extra-index-url https://download.pytorch.org/whl/cpu
-
 chromadb
 numpy<2
 pandas
@@ -8,8 +6,8 @@ rank-bm25
 openai
 python-dotenv
 streamlit
-
-torch==2.3.1+cpu
-transformers==4.41.2
-sentence-transformers==3.0.1
-huggingface-hub==0.23.4
+transformers
+sentence-transformers
+torch
+torchvision
+huggingface-hub
