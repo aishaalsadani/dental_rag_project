@@ -6,8 +6,3 @@ rank-bm25
 openai
 python-dotenv
 streamlit
-transformers
-sentence-transformers
-torch
-torchvision
-huggingface-hub
